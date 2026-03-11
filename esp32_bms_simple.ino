@@ -8,18 +8,19 @@ Hardware Connections:
 - Voltage Sensor: Analog input (ADC1_0 - GPIO 36)
 - Current Sensor: Analog input (ADC1_3 - GPIO 39)
 - Temperature Sensor: Analog input (ADC1_6 - GPIO 34)
+
+Libraries Required:
+- ArduinoJson (version 6.x recommended) - Install via Library Manager
 */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-// WiFi Configuration
 const char* WIFI_SSID = "Airtel_bala_1093";
 const char* WIFI_PASSWORD = "Air@75272";
 
-// API Configuration
-const char* API_HOST = "http://localhost:8000/";  // Replace with your backend server IP address
+const char* API_HOST = "192.168.1.15";
 const int API_PORT = 8000;
 
 // GPIO Pin Configuration
@@ -34,9 +35,11 @@ const int TEMP_SENSOR_PIN = 34;     // ADC1_6
 // Timing Configuration
 const unsigned long API_UPDATE_INTERVAL = 2000;  // 2 seconds
 const unsigned long SENSOR_UPDATE_INTERVAL = 1000;  // 1 second
+const unsigned long WIFI_RECONNECT_INTERVAL = 5000;  // 5 seconds
 
 unsigned long lastApiUpdate = 0;
 unsigned long lastSensorUpdate = 0;
+unsigned long lastWifiReconnect = 0;
 
 WiFiClient wifiClient;
 HTTPClient http;
@@ -51,8 +54,8 @@ String batteryState = "idle";
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-
+  Serial.println("\n=== ESP32 BMS System Initializing ===");
+  
   // Initialize relay pins
   pinMode(CHARGE_RELAY_PIN, OUTPUT);
   pinMode(DISCHARGE_RELAY_PIN, OUTPUT);
@@ -60,40 +63,73 @@ void setup() {
   // Initially turn off all relays
   digitalWrite(CHARGE_RELAY_PIN, LOW);
   digitalWrite(DISCHARGE_RELAY_PIN, LOW);
+  Serial.println("Relays initialized: OFF");
 
   // Connect to WiFi
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  connectToWiFi();
 
-  while (WiFi.status() != WL_CONNECTED) {
+  // Initialize sensors
+  Serial.println("Sensors initialized");
+
+  Serial.println("=== System initialization complete ===");
+}
+
+void loop() {
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    handleWiFiDisconnect();
+  } else {
+    // Update sensor readings periodically
+    if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
+      updateSensorReadings();
+      lastSensorUpdate = millis();
+    }
+
+    // Update backend API periodically
+    if (millis() - lastApiUpdate >= API_UPDATE_INTERVAL) {
+      updateBackendAPI();
+      controlRelays();
+      lastApiUpdate = millis();
+    }
+  }
+}
+
+void connectToWiFi() {
+  Serial.print("\nConnecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  int connectionAttempts = 0;
+  const int MAX_ATTEMPTS = 30;  // 15 seconds
+
+  while (WiFi.status() != WL_CONNECTED && connectionAttempts < MAX_ATTEMPTS) {
+    connectionAttempts++;
     delay(500);
     Serial.print(".");
   }
 
-  Serial.println("\nWiFi connected!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-
-  // Test connection to backend
-  if (testBackendConnection()) {
-    Serial.println("Backend API connection successful!");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    
+    // Test backend connection
+    if (testBackendConnection()) {
+      Serial.println("Backend API connection successful");
+    } else {
+      Serial.println("Backend API connection failed - will retry later");
+    }
   } else {
-    Serial.println("Backend API connection failed!");
+    Serial.println("\nWiFi Connection Failed!");
   }
 }
 
-void loop() {
-  // Update sensor readings periodically
-  if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
-    updateSensorReadings();
-    lastSensorUpdate = millis();
-  }
-
-  // Update backend API periodically
-  if (millis() - lastApiUpdate >= API_UPDATE_INTERVAL) {
-    updateBackendAPI();
-    controlRelays();
-    lastApiUpdate = millis();
+void handleWiFiDisconnect() {
+  if (millis() - lastWifiReconnect >= WIFI_RECONNECT_INTERVAL) {
+    Serial.println("\nWiFi disconnected - attempting to reconnect");
+    connectToWiFi();
+    lastWifiReconnect = millis();
   }
 }
 
@@ -102,19 +138,18 @@ bool testBackendConnection() {
   http.begin(wifiClient, url);
 
   int httpResponseCode = http.GET();
-  bool success = false;
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
     Serial.println("Connection test response: " + response);
-    success = true;
+    http.end();
+    return true;
   } else {
     Serial.print("Connection test failed. HTTP code: ");
     Serial.println(httpResponseCode);
+    http.end();
+    return false;
   }
-
-  http.end();
-  return success;
 }
 
 void updateSensorReadings() {
@@ -128,9 +163,9 @@ void updateSensorReadings() {
   current = map(currentRaw, 0, 4095, -20, 20) / 10.0;  // -2A to 2A range
   temperature = map(tempRaw, 0, 4095, -40, 85);  // -40°C to 85°C range
 
-  Serial.print("Voltage: "); Serial.print(voltage); Serial.print("V, ");
-  Serial.print("Current: "); Serial.print(current); Serial.print("A, ");
-  Serial.print("Temperature: "); Serial.print(temperature); Serial.println("°C");
+  Serial.print("Sensor Readings: V="); Serial.print(voltage); 
+  Serial.print("V, I="); Serial.print(current); 
+  Serial.print("A, T="); Serial.print(temperature); Serial.println("°C");
 }
 
 void updateBackendAPI() {
@@ -170,42 +205,50 @@ void updateBackendAPI() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
+    Serial.println("State response: " + response);
+    
+    // Parse response
     StaticJsonDocument<200> jsonDoc;
     DeserializationError error = deserializeJson(jsonDoc, response);
 
     if (!error) {
-      batteryState = jsonDoc["state"].as<String>();
-      String warning = jsonDoc["warning"].as<String>();
-      
-      Serial.print("Battery State: "); Serial.print(batteryState);
-      Serial.print(", Warning: "); Serial.println(warning);
+      const char* state = jsonDoc["state"];
+      if (state) {
+        batteryState = String(state);
+      }
+
+      const char* warning = jsonDoc["warning"];
+      if (warning) {
+        Serial.print("Warning: "); Serial.println(warning);
+      }
     } else {
-      Serial.print("JSON deserialization error: ");
+      Serial.print("JSON parsing error: ");
       Serial.println(error.c_str());
+      batteryState = "idle";
     }
   } else {
     Serial.print("Get state failed. HTTP code: ");
     Serial.println(httpResponseCode);
-    batteryState = "idle";  // Default to idle if we can't get state
+    batteryState = "idle";
   }
 
   http.end();
 }
 
 void controlRelays() {
-  Serial.print("Current State: "); Serial.println(batteryState);
+  Serial.print("Battery State: "); Serial.println(batteryState);
 
   if (batteryState == "charging") {
     digitalWrite(CHARGE_RELAY_PIN, HIGH);
     digitalWrite(DISCHARGE_RELAY_PIN, LOW);
-    Serial.println("Charge relay ON, Discharge relay OFF");
+    Serial.println("Relay Control: Charge ON, Discharge OFF");
   } else if (batteryState == "discharging") {
     digitalWrite(CHARGE_RELAY_PIN, LOW);
     digitalWrite(DISCHARGE_RELAY_PIN, HIGH);
-    Serial.println("Charge relay OFF, Discharge relay ON");
-  } else {  // idle or unknown state
+    Serial.println("Relay Control: Charge OFF, Discharge ON");
+  } else {
     digitalWrite(CHARGE_RELAY_PIN, LOW);
     digitalWrite(DISCHARGE_RELAY_PIN, LOW);
-    Serial.println("Both relays OFF - Idle state");
+    Serial.println("Relay Control: Both OFF - Idle");
   }
 }

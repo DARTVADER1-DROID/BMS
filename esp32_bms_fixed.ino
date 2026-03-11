@@ -12,14 +12,13 @@ Hardware Connections:
 
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
 
 // WiFi Configuration
 const char* WIFI_SSID = "Airtel_bala_1093";
 const char* WIFI_PASSWORD = "Air@75272";
 
 // API Configuration
-const char* API_HOST = "http://localhost:8000/";  // Replace with your backend server IP address
+const char* API_HOST = "127.0.0.1";  // Replace with your backend server IP address
 const int API_PORT = 8000;
 
 // GPIO Pin Configuration
@@ -32,11 +31,13 @@ const int CURRENT_SENSOR_PIN = 39;  // ADC1_3
 const int TEMP_SENSOR_PIN = 34;     // ADC1_6
 
 // Timing Configuration
-const unsigned long API_UPDATE_INTERVAL = 2000;  // 2 seconds
+const unsigned long API_UPDATE_INTERVAL = 3000;  // 3 seconds
 const unsigned long SENSOR_UPDATE_INTERVAL = 1000;  // 1 second
+const unsigned long WIFI_RECONNECT_DELAY = 5000;  // 5 seconds
 
 unsigned long lastApiUpdate = 0;
 unsigned long lastSensorUpdate = 0;
+unsigned long lastWifiConnectAttempt = 0;
 
 WiFiClient wifiClient;
 HTTPClient http;
@@ -53,6 +54,8 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  Serial.println("ESP32 BMS System Starting...");
+
   // Initialize relay pins
   pinMode(CHARGE_RELAY_PIN, OUTPUT);
   pinMode(DISCHARGE_RELAY_PIN, OUTPUT);
@@ -62,42 +65,66 @@ void setup() {
   digitalWrite(DISCHARGE_RELAY_PIN, LOW);
 
   // Connect to WiFi
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("\nWiFi connected!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-
-  // Test connection to backend
-  if (testBackendConnection()) {
-    Serial.println("Backend API connection successful!");
-  } else {
-    Serial.println("Backend API connection failed!");
-  }
+  connectToWiFi();
 }
 
 void loop() {
+  // Check and maintain WiFi connection
+  checkWiFiConnection();
+
   // Update sensor readings periodically
   if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
     updateSensorReadings();
     lastSensorUpdate = millis();
   }
 
-  // Update backend API periodically
-  if (millis() - lastApiUpdate >= API_UPDATE_INTERVAL) {
+  // Update backend API periodically (only if WiFi is connected)
+  if (WiFi.status() == WL_CONNECTED && millis() - lastApiUpdate >= API_UPDATE_INTERVAL) {
     updateBackendAPI();
     controlRelays();
     lastApiUpdate = millis();
   }
 }
 
+void connectToWiFi() {
+  Serial.println("\nConnecting to WiFi: " + String(WIFI_SSID));
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
+  } else {
+    Serial.println("\nWiFi connection failed!");
+  }
+
+  lastWifiConnectAttempt = millis();
+}
+
+void checkWiFiConnection() {
+  if (WiFi.status() != WL_CONNECTED && millis() - lastWifiConnectAttempt >= WIFI_RECONNECT_DELAY) {
+    Serial.println("\nWiFi connection lost. Reconnecting...");
+    connectToWiFi();
+  }
+}
+
 bool testBackendConnection() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected, skipping backend test");
+    return false;
+  }
+
   String url = String("http://") + API_HOST + ":" + String(API_PORT) + "/";
   http.begin(wifiClient, url);
 
@@ -106,11 +133,15 @@ bool testBackendConnection() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
-    Serial.println("Connection test response: " + response);
+    Serial.println("Backend connection test: Success");
+    Serial.println("Response: " + response);
     success = true;
   } else {
-    Serial.print("Connection test failed. HTTP code: ");
+    Serial.print("Backend connection test failed. HTTP code: ");
     Serial.println(httpResponseCode);
+    if (httpResponseCode == -1) {
+      Serial.println("Possible causes: Server down, incorrect IP, network issue, or CORS problem");
+    }
   }
 
   http.end();
@@ -134,21 +165,27 @@ void updateSensorReadings() {
 }
 
 void updateBackendAPI() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected, skipping API update");
+    batteryState = "idle";
+    return;
+  }
+
+  Serial.println("\nUpdating backend API...");
+
   // Send sensor data to backend
   String url = String("http://") + API_HOST + ":" + String(API_PORT) + "/update";
   http.begin(wifiClient, url);
   http.addHeader("Content-Type", "application/json");
 
-  // Create JSON payload
-  StaticJsonDocument<200> jsonDoc;
-  jsonDoc["voltage"] = voltage;
-  jsonDoc["current"] = current;
-  jsonDoc["temperature"] = temperature;
-  jsonDoc["time"] = millis() / 1000.0;
-  jsonDoc["hardware_connection"] = true;
-
-  String requestBody;
-  serializeJson(jsonDoc, requestBody);
+  // Create JSON payload manually (without ArduinoJson)
+  String requestBody = String("{") +
+    "\"voltage\":" + String(voltage) + "," +
+    "\"current\":" + String(current) + "," +
+    "\"temperature\":" + String(temperature) + "," +
+    "\"time\":" + String(millis() / 1000.0) + "," +
+    "\"hardware_connection\":true" +
+    "}";
 
   int httpResponseCode = http.POST(requestBody);
 
@@ -158,6 +195,9 @@ void updateBackendAPI() {
   } else {
     Serial.print("Update failed. HTTP code: ");
     Serial.println(httpResponseCode);
+    if (httpResponseCode == -1) {
+      Serial.println("Connection refused - check server IP and port");
+    }
   }
 
   http.end();
@@ -170,22 +210,35 @@ void updateBackendAPI() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
-    StaticJsonDocument<200> jsonDoc;
-    DeserializationError error = deserializeJson(jsonDoc, response);
-
-    if (!error) {
-      batteryState = jsonDoc["state"].as<String>();
-      String warning = jsonDoc["warning"].as<String>();
-      
-      Serial.print("Battery State: "); Serial.print(batteryState);
-      Serial.print(", Warning: "); Serial.println(warning);
+    Serial.println("State response: " + response);
+    
+    // Extract state from response using string manipulation
+    if (response.indexOf("\"state\":\"charging\"") != -1) {
+      batteryState = "charging";
+    } else if (response.indexOf("\"state\":\"discharging\"") != -1) {
+      batteryState = "discharging";
+    } else if (response.indexOf("\"state\":\"idle\"") != -1) {
+      batteryState = "idle";
     } else {
-      Serial.print("JSON deserialization error: ");
-      Serial.println(error.c_str());
+      Serial.println("Unknown state received");
+      batteryState = "idle";
+    }
+
+    // Extract warning message
+    int warningStart = response.indexOf("\"warning\":\"") + 11;
+    if (warningStart > 10) {
+      int warningEnd = response.indexOf("\"", warningStart);
+      if (warningEnd > warningStart) {
+        String warning = response.substring(warningStart, warningEnd);
+        Serial.print("Warning: "); Serial.println(warning);
+      }
     }
   } else {
     Serial.print("Get state failed. HTTP code: ");
     Serial.println(httpResponseCode);
+    if (httpResponseCode == -1) {
+      Serial.println("Connection refused - check server IP and port");
+    }
     batteryState = "idle";  // Default to idle if we can't get state
   }
 

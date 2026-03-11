@@ -12,14 +12,13 @@ Hardware Connections:
 
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
 
 // WiFi Configuration
-const char* WIFI_SSID = "Airtel_bala_1093";
-const char* WIFI_PASSWORD = "Air@75272";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 // API Configuration
-const char* API_HOST = "http://localhost:8000/";  // Replace with your backend server IP address
+const char* API_HOST = "YOUR_SERVER_IP";  // Replace with your backend server IP address
 const int API_PORT = 8000;
 
 // GPIO Pin Configuration
@@ -139,16 +138,14 @@ void updateBackendAPI() {
   http.begin(wifiClient, url);
   http.addHeader("Content-Type", "application/json");
 
-  // Create JSON payload
-  StaticJsonDocument<200> jsonDoc;
-  jsonDoc["voltage"] = voltage;
-  jsonDoc["current"] = current;
-  jsonDoc["temperature"] = temperature;
-  jsonDoc["time"] = millis() / 1000.0;
-  jsonDoc["hardware_connection"] = true;
-
-  String requestBody;
-  serializeJson(jsonDoc, requestBody);
+  // Create JSON payload manually (without ArduinoJson)
+  String requestBody = String("{") +
+    "\"voltage\":" + String(voltage) + "," +
+    "\"current\":" + String(current) + "," +
+    "\"temperature\":" + String(temperature) + "," +
+    "\"time\":" + String(millis() / 1000.0) + "," +
+    "\"hardware_connection\":true" +
+    "}";
 
   int httpResponseCode = http.POST(requestBody);
 
@@ -170,18 +167,28 @@ void updateBackendAPI() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
-    StaticJsonDocument<200> jsonDoc;
-    DeserializationError error = deserializeJson(jsonDoc, response);
-
-    if (!error) {
-      batteryState = jsonDoc["state"].as<String>();
-      String warning = jsonDoc["warning"].as<String>();
-      
-      Serial.print("Battery State: "); Serial.print(batteryState);
-      Serial.print(", Warning: "); Serial.println(warning);
+    Serial.println("State response: " + response);
+    
+    // Extract state from response using string manipulation
+    if (response.indexOf("\"state\":\"charging\"") != -1) {
+      batteryState = "charging";
+    } else if (response.indexOf("\"state\":\"discharging\"") != -1) {
+      batteryState = "discharging";
+    } else if (response.indexOf("\"state\":\"idle\"") != -1) {
+      batteryState = "idle";
     } else {
-      Serial.print("JSON deserialization error: ");
-      Serial.println(error.c_str());
+      Serial.println("Unknown state received");
+      batteryState = "idle";
+    }
+
+    // Extract warning message
+    int warningStart = response.indexOf("\"warning\":\"") + 11;
+    if (warningStart > 10) {
+      int warningEnd = response.indexOf("\"", warningStart);
+      if (warningEnd > warningStart) {
+        String warning = response.substring(warningStart, warningEnd);
+        Serial.print("Warning: "); Serial.println(warning);
+      }
     }
   } else {
     Serial.print("Get state failed. HTTP code: ");

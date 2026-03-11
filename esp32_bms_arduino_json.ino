@@ -8,6 +8,9 @@ Hardware Connections:
 - Voltage Sensor: Analog input (ADC1_0 - GPIO 36)
 - Current Sensor: Analog input (ADC1_3 - GPIO 39)
 - Temperature Sensor: Analog input (ADC1_6 - GPIO 34)
+
+Libraries Required:
+- ArduinoJson (version 6.x recommended) - Install via Library Manager
 */
 
 #include <WiFi.h>
@@ -19,7 +22,7 @@ const char* WIFI_SSID = "Airtel_bala_1093";
 const char* WIFI_PASSWORD = "Air@75272";
 
 // API Configuration
-const char* API_HOST = "http://localhost:8000/";  // Replace with your backend server IP address
+const char* API_HOST = "127.0.0.1";  // Replace with your backend server IP address
 const int API_PORT = 8000;
 
 // GPIO Pin Configuration
@@ -139,7 +142,7 @@ void updateBackendAPI() {
   http.begin(wifiClient, url);
   http.addHeader("Content-Type", "application/json");
 
-  // Create JSON payload
+  // Create JSON payload using ArduinoJson
   StaticJsonDocument<200> jsonDoc;
   jsonDoc["voltage"] = voltage;
   jsonDoc["current"] = current;
@@ -170,18 +173,26 @@ void updateBackendAPI() {
 
   if (httpResponseCode == HTTP_CODE_OK) {
     String response = http.getString();
+    Serial.println("State response: " + response);
+    
+    // Parse response using ArduinoJson
     StaticJsonDocument<200> jsonDoc;
     DeserializationError error = deserializeJson(jsonDoc, response);
 
     if (!error) {
-      batteryState = jsonDoc["state"].as<String>();
-      String warning = jsonDoc["warning"].as<String>();
-      
-      Serial.print("Battery State: "); Serial.print(batteryState);
-      Serial.print(", Warning: "); Serial.println(warning);
+      const char* state = jsonDoc["state"];
+      if (state) {
+        batteryState = String(state);
+      }
+
+      const char* warning = jsonDoc["warning"];
+      if (warning) {
+        Serial.print("Warning: "); Serial.println(warning);
+      }
     } else {
-      Serial.print("JSON deserialization error: ");
+      Serial.print("JSON parsing error: ");
       Serial.println(error.c_str());
+      batteryState = "idle";
     }
   } else {
     Serial.print("Get state failed. HTTP code: ");

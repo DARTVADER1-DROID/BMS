@@ -1,6 +1,10 @@
 from pydantic import BaseModel
 import time
 
+
+
+
+
 class battery_data(BaseModel):
     voltage : float
     current : float

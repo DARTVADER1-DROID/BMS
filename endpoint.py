@@ -96,9 +96,6 @@ async def update_battery(data: battery_data):
     b1.check_stop()
     return {
         "message": "Battery data updated",
-        "data": data.model_dump_json(),
-        "state": b1.get_state(),
-        "warning": b1.warning_messages
     }
 
 

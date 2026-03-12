@@ -1,5 +1,7 @@
-// API Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// API Configuration - Dynamic for local and Vercel deployment
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:8000' 
+    : '';  // Vercel serves API from same origin
 
 // DOM Elements
 const elements = {
@@ -11,9 +13,15 @@ const elements = {
     voltage: document.getElementById('voltage'),
     current: document.getElementById('current'),
     temperature: document.getElementById('temperature'),
+    soc: document.getElementById('soc'),
+    soh: document.getElementById('soh'),
+    rul: document.getElementById('rul'),
     voltageBar: document.getElementById('voltageBar'),
     currentBar: document.getElementById('currentBar'),
     tempBar: document.getElementById('tempBar'),
+    socBar: document.getElementById('socBar'),
+    sohBar: document.getElementById('sohBar'),
+    rulBar: document.getElementById('rulBar'),
     
     // Battery Control
     state: document.getElementById('state'),
@@ -114,11 +122,34 @@ async function updateBatteryData() {
     }
 }
 
+async function updateBatteryHealthData() {
+    const [socData, sohData, rulData] = await Promise.all([
+        fetchData('/s_o_c'),
+        fetchData('/s_o_h'),
+        fetchData('/r_u_l')
+    ]);
+    
+    if (socData) {
+        elements.soc.textContent = socData.s_o_c.toFixed(1);
+        updateParameterBar(elements.socBar, socData.s_o_c, 0, 100);
+    }
+    
+    if (sohData) {
+        elements.soh.textContent = sohData.s_o_h.toFixed(1);
+        updateParameterBar(elements.sohBar, sohData.s_o_h, 0, 100);
+    }
+    
+    if (rulData) {
+        elements.rul.textContent = rulData.r_u_l.toFixed(1);
+        updateParameterBar(elements.rulBar, rulData.r_u_l, 0, 100);
+    }
+}
+
 async function updateBatteryState() {
     const stateData = await fetchData('/state');
     if (stateData) {
         elements.state.textContent = stateData.state;
-        updateWarningLevel(stateData.warning);
+        updateWarningLevel(stateData.warning_messages);
     }
 }
 
@@ -165,7 +196,9 @@ async function updateBatteryParameters(event) {
     const formData = {
         voltage: parseFloat(elements.voltageInput.value),
         current: parseFloat(elements.currentInput.value),
-        temperature: parseFloat(elements.tempInput.value)
+        temperature: parseFloat(elements.tempInput.value),
+        time: Date.now() / 1000.0,
+        hardware_connection: true
     };
     
     elements.dataForm.querySelector('.submit-btn').disabled = true;
@@ -235,14 +268,16 @@ async function initializeDashboard() {
         // Update initial data
         await Promise.all([
             updateBatteryData(),
-            updateBatteryState()
+            updateBatteryState(),
+            updateBatteryHealthData()
         ]);
         
         // Start periodic updates
         setInterval(async () => {
             await Promise.all([
                 updateBatteryData(),
-                updateBatteryState()
+                updateBatteryState(),
+                updateBatteryHealthData()
             ]);
         }, 2000);
     } else {

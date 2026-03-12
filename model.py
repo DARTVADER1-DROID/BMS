@@ -10,7 +10,7 @@ class battery_data(BaseModel):
     current : float
     temperature : float
     time : float
-    hardware_connection : float
+    hardware_connection : bool | float
 
 
 

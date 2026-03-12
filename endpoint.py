@@ -53,7 +53,7 @@ async def data():
 
 @app.get("/state")
 async def get_state():
-    return {"state": b1.get_state(), "warning": b1.warning_messages}
+    return {"state": b1.get_state(), "warning_messages": b1.warning_messages}
 
 @app.post("/charge")
 async def charge():

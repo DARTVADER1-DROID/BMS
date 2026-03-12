@@ -32,11 +32,15 @@ const int CURRENT_SENSOR_PIN = 39;  // ADC1_3
 const int TEMP_SENSOR_PIN    = 34;  // ADC1_6
 
 // ── Timing Configuration ─────────────────────────────────────
-const unsigned long API_UPDATE_INTERVAL    = 3000;  // 3 seconds
-const unsigned long SENSOR_UPDATE_INTERVAL = 1000;  // 1 second
-const unsigned long WIFI_RECONNECT_DELAY   = 5000;  // 5 seconds
+// Heartbeat (POST /update) fires fast and independently — keeps lastseen fresh
+// State poll (GET /state) can be slower — only needed for relay decisions
+const unsigned long HEARTBEAT_INTERVAL     = 800;   // 0.8s — well under the 3s backend timeout
+const unsigned long STATE_POLL_INTERVAL    = 3000;  // 3s — relay state sync
+const unsigned long SENSOR_UPDATE_INTERVAL = 500;   // 0.5s — local sensor reads
+const unsigned long WIFI_RECONNECT_DELAY   = 5000;  // 5s
 
-unsigned long lastApiUpdate          = 0;
+unsigned long lastHeartbeat          = 0;
+unsigned long lastStatePoll          = 0;
 unsigned long lastSensorUpdate       = 0;
 unsigned long lastWifiConnectAttempt = 0;
 
@@ -74,17 +78,28 @@ void setup() {
 void loop() {
   checkWiFiConnection();
 
-  // Update sensor readings every second
+  // Read sensors frequently — independent of network
   if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
     updateSensorReadings();
     lastSensorUpdate = millis();
   }
 
-  // Push to backend and sync relay state every 3 seconds
-  if (WiFi.status() == WL_CONNECTED && millis() - lastApiUpdate >= API_UPDATE_INTERVAL) {
-    updateBackendAPI();
-    controlRelays();
-    lastApiUpdate = millis();
+  if (WiFi.status() == WL_CONNECTED) {
+
+    // Heartbeat: POST /update — fires fast to keep backend lastseen fresh
+    // Runs independently so GET /state latency can never block it
+    if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL) {
+      sendHeartbeat();
+      lastHeartbeat = millis();
+    }
+
+    // State poll: GET /state — slower, only used for relay decisions
+    if (millis() - lastStatePoll >= STATE_POLL_INTERVAL) {
+      fetchState();
+      controlRelays();
+      lastStatePoll = millis();
+    }
+
   }
 }
 
@@ -138,66 +153,57 @@ void updateSensorReadings() {
 }
 
 // ── API ───────────────────────────────────────────────────────
-void updateBackendAPI() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected — skipping API update.");
-    batteryState = "idle";
-    return;
+
+// Sends sensor data to backend — sole purpose is keeping lastseen alive
+// Fires every 0.8s independently of state polling
+void sendHeartbeat() {
+  HTTPClient http;
+  String url = String("https://") + API_HOST + "/update";
+  http.begin(wifiClient, url);
+  http.addHeader("Content-Type", "application/json");
+
+  String body = String("{") +
+    "\"voltage\":"     + String(voltage,     4) + "," +
+    "\"current\":"     + String(current_a,   4) + "," +
+    "\"temperature\":" + String(temperature, 4) + "," +
+    "\"time\":"        + String(millis() / 1000.0, 3) + "," +
+    "\"hardware_connection\":true" +
+    "}";
+
+  int code = http.POST(body);
+  if (code == HTTP_CODE_OK) {
+    Serial.println("♥ Heartbeat OK");
+  } else {
+    Serial.printf("♥ Heartbeat failed — HTTP %d\n", code);
   }
+  http.end();
+}
 
-  Serial.println("\n── Updating backend ──");
+// Fetches battery state from backend — used only for relay control decisions
+// Runs every 3s; its latency never affects the heartbeat
+void fetchState() {
+  HTTPClient http;
+  String url = String("https://") + API_HOST + "/state";
+  http.begin(wifiClient, url);
 
-  // ── POST /update ─────────────────────────────────────────
-  {
-    HTTPClient http;
-    String url = String("https://") + API_HOST + "/update";
-    http.begin(wifiClient, url);
-    http.addHeader("Content-Type", "application/json");
+  int code = http.GET();
+  if (code == HTTP_CODE_OK) {
+    String response = http.getString();
+    Serial.println("GET /state OK: " + response);
 
-    String body = String("{") +
-      "\"voltage\":"     + String(voltage,     4) + "," +
-      "\"current\":"     + String(current_a,   4) + "," +
-      "\"temperature\":" + String(temperature, 4) + "," +
-      "\"time\":"        + String(millis() / 1000.0, 3) + "," +
-      "\"hardware_connection\":true" +
-      "}";
-
-    int code = http.POST(body);
-    if (code == HTTP_CODE_OK) {
-      Serial.println("POST /update OK: " + http.getString());
-    } else {
-      Serial.printf("POST /update failed — HTTP %d\n", code);
-    }
-    http.end();
-  }
-
-  // ── GET /state ────────────────────────────────────────────
-  {
-    HTTPClient http;
-    String url = String("https://") + API_HOST + "/state";
-    http.begin(wifiClient, url);
-
-    int code = http.GET();
-    if (code == HTTP_CODE_OK) {
-      String response = http.getString();
-      Serial.println("GET /state OK: " + response);
-
-      // Parse state from JSON response
-      if      (response.indexOf("\"charging\"")    != -1) { batteryState = "charging"; }
-      else if (response.indexOf("\"discharging\"") != -1) { batteryState = "discharging"; }
-      else if (response.indexOf("\"stopped\"")     != -1) { batteryState = "stopped"; }
-      else if (response.indexOf("\"idle\"")        != -1) { batteryState = "idle"; }
-      else {
-        Serial.println("Unknown state — defaulting to idle.");
-        batteryState = "idle";
-      }
-
-    } else {
-      Serial.printf("GET /state failed — HTTP %d\n", code);
+    if      (response.indexOf("\"charging\"")    != -1) { batteryState = "charging"; }
+    else if (response.indexOf("\"discharging\"") != -1) { batteryState = "discharging"; }
+    else if (response.indexOf("\"stopped\"")     != -1) { batteryState = "stopped"; }
+    else if (response.indexOf("\"idle\"")        != -1) { batteryState = "idle"; }
+    else {
+      Serial.println("Unknown state — defaulting to idle.");
       batteryState = "idle";
     }
-    http.end();
+  } else {
+    Serial.printf("GET /state failed — HTTP %d\n", code);
+    batteryState = "idle";
   }
+  http.end();
 }
 
 // ── Relay Control ─────────────────────────────────────────────

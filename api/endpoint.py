@@ -82,7 +82,10 @@ async def get_s_o_h():
 async def get_r_u_l():
     return {"r_u_l": b1.r_u_l()}
 
-
+@app.post("/cycles")
+async def cycles(count: int):
+    b1.update_cycle_count(count)
+    return {"message": "Cycle count updated"}
 
 
 

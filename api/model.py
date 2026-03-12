@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 import time
-
+import math
 
 
 
@@ -54,7 +54,9 @@ class Battery:
 
         #lifetime tracker
         self.lastseen = time.time()
-        self.hardware_connection = False
+        self.hardware_connection : bool = False
+        self.rated_useful_life : float = 1000
+        self.cycle_count : int = 112
 
 
     def validate_transition(self, new_state):
@@ -86,18 +88,20 @@ class Battery:
         return True
     
 
-    def s_o_c(self):
-        data = self.voltage * self.current * self.temperature
-        self.state_of_charge = data
-        return self.state_of_charge
+    
     
     def s_o_h(self):
-        data = self.voltage * self.current * self.temperature
+        data = 0.000088875 * ((self.cycle_count - 760.58) ** 2) + (math.log(self.cycle_count / 3.97379) ** 2) + 47.917
         self.state_of_health = data
         return self.state_of_health
     
+    def s_o_c(self):
+        data = ((self.voltage - self.voltage_min) / (self.voltage_max - self.voltage_min) * (self.s_o_h() / 100)) * 100
+        self.state_of_charge = data
+        return self.state_of_charge
+    
     def r_u_l(self):
-        data = self.voltage * self.current * self.temperature
+        data = self.rated_useful_life - self.cycle_count * 0.012
         self.remaining_useful_life = data
         return self.remaining_useful_life
 
@@ -142,6 +146,13 @@ class Battery:
     
     def get_state(self):
         return self.state
+    
+    def update_cycle_count(self, count: int):
+        self.cycle_count = count
+        self.s_o_h()
+        self.s_o_c()
+        self.r_u_l()
+        
     
 
       

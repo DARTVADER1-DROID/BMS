@@ -72,15 +72,24 @@ async def stop():
 
 @app.get("/s_o_c")
 async def get_s_o_c():
-    return {"s_o_c": b1.s_o_c()}
+    if b1.validate_soc_soh_rul():
+        return {"s_o_c": b1.s_o_c()}
+    else:
+        return {"s_o_c": "Error: cannot calculate at charging or discharging"}
 
 @app.get("/s_o_h")
 async def get_s_o_h():
-    return {"s_o_h": b1.s_o_h()}
+    if b1.validate_soc_soh_rul():
+        return {"s_o_h": b1.s_o_h()}
+    else:
+        return {"s_o_h": "Error: cannot calculate at charging or discharging"}
 
 @app.get("/r_u_l")
 async def get_r_u_l():
-    return {"r_u_l": b1.r_u_l()}
+    if b1.validate_soc_soh_rul():
+        return {"r_u_l": b1.r_u_l()}
+    else:
+        return {"r_u_l": "Error: cannot calculate at charging or discharging"}
 
 @app.post("/cycles")
 async def cycles(count: int):

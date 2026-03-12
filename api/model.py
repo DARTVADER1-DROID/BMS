@@ -101,7 +101,7 @@ class Battery:
         return self.state_of_charge
     
     def r_u_l(self):
-        data = self.rated_useful_life - self.cycle_count * 0.012
+        data = self.rated_useful_life - self.cycle_count 
         self.remaining_useful_life = data
         return self.remaining_useful_life
 
@@ -152,7 +152,11 @@ class Battery:
         self.s_o_h()
         self.s_o_c()
         self.r_u_l()
-        
+
+    def validate_soc_soh_rul(self):
+        if self.state != "charging" and self.state != "discharging":
+            return True
+        return False
     
 
       

@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BMS · Battery Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<style>
+/* ============================================================
+   DESIGN TOKENS & RESET
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-void:        #030710;
+  --bg-deep:        #060d1a;
+  --bg-surface:     rgba(255,255,255,0.03);
+  --bg-hover:       rgba(255,255,255,0.06);
+
+  --glass-border:   rgba(255,255,255,0.07);
+  --glass-shine:    rgba(255,255,255,0.05);
+
+  --cyan:           #00d4ff;
+  --cyan-dim:       rgba(0,212,255,0.15);
+  --cyan-glow:      rgba(0,212,255,0.08);
+  --green:          #00ff9d;
+  --green-dim:      rgba(0,255,157,0.12);
+  --amber:          #ffb800;
+  --amber-dim:      rgba(255,184,0,0.12);
+  --red:            #ff4365;
+  --red-dim:        rgba(255,67,101,0.12);
+  --slate:          #94a3b8;
+  --slate-dim:      rgba(148,163,184,0.1);
+
+  --text-primary:   #e8f0fe;
+  --text-secondary: #64748b;
+  --text-mono:      #a8c0cc;
+
+  --font-display:   'Orbitron', monospace;
+  --font-mono:      'JetBrains Mono', monospace;
+
+  --radius-sm:  10px;
+  --radius-md:  16px;
+  --radius-lg:  22px;
+  --radius-xl:  28px;
+
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  --shadow-glow-cyan: 0 0 30px rgba(0,212,255,0.12);
+  --shadow-glow-green: 0 0 30px rgba(0,255,157,0.12);
+}
+
+body {
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   ANIMATED BACKGROUND
+   ============================================================ */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+}
+.bg-orb {
+  position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0;
+  animation: orbFloat 12s ease-in-out infinite;
+}
+.bg-orb-1 { width: 600px; height: 600px; top: -200px; left: -150px; background: rgba(0,212,255,0.05); animation-delay: 0s; }
+.bg-orb-2 { width: 500px; height: 500px; bottom: -150px; right: -100px; background: rgba(0,255,157,0.04); animation-delay: -4s; }
+.bg-orb-3 { width: 350px; height: 350px; top: 40%; left: 40%; background: rgba(255,184,0,0.03); animation-delay: -8s; }
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33%       { transform: translate(30px, -20px) scale(1.05); }
+  66%       { transform: translate(-20px, 30px) scale(0.97); }
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+#app {
+  position: relative; z-index: 1;
+  max-width: 1440px; margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 0 24px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 28px;
+}
+.header-brand {
+  display: flex; align-items: center; gap: 14px;
+}
+.brand-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,255,157,0.1));
+  border: 1px solid rgba(0,212,255,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 0 20px rgba(0,212,255,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.brand-title {
+  font-family: var(--font-display); font-size: 15px; font-weight: 700;
+  letter-spacing: 0.2em; color: var(--text-primary);
+}
+.brand-sub {
+  font-size: 10px; color: var(--text-secondary); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 2px;
+}
+
+.header-right { display: flex; align-items: center; gap: 14px; }
+
+#conn-indicator {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: var(--radius-sm);
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  font-size: 11px; letter-spacing: 0.08em; color: var(--text-secondary);
+  transition: all 0.4s ease;
+}
+#conn-indicator.connected {
+  background: rgba(0,255,157,0.06);
+  border-color: rgba(0,255,157,0.25);
+  color: var(--green);
+}
+#conn-indicator.disconnected {
+  background: rgba(255,67,101,0.06);
+  border-color: rgba(255,67,101,0.25);
+  color: var(--red);
+}
+.conn-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50%       { opacity: 0.6; box-shadow: 0 0 0 4px transparent; }
+}
+
+#state-badge {
+  padding: 7px 16px; border-radius: var(--radius-sm);
+  font-family: var(--font-display); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  background: var(--slate-dim); border: 1px solid rgba(148,163,184,0.2);
+  color: var(--slate); transition: all 0.4s ease;
+}
+#state-badge.state-charging    { background: var(--green-dim);  border-color: rgba(0,255,157,0.35);  color: var(--green);  box-shadow: 0 0 16px rgba(0,255,157,0.15); }
+#state-badge.state-discharging { background: var(--amber-dim);  border-color: rgba(255,184,0,0.35);  color: var(--amber);  box-shadow: 0 0 16px rgba(255,184,0,0.15); }
+#state-badge.state-stopped     { background: var(--red-dim);    border-color: rgba(255,67,101,0.35); color: var(--red);    box-shadow: 0 0 16px rgba(255,67,101,0.15); }
+#state-badge.state-idle        { background: var(--slate-dim);  border-color: rgba(148,163,184,0.2); color: var(--slate); }
+
+/* Settings icon */
+.btn-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); cursor: pointer; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; flex-shrink: 0;
+}
+.btn-icon:hover { background: var(--bg-hover); color: var(--cyan); border-color: rgba(0,212,255,0.3); }
+
+/* ============================================================
+   METRIC STRIP
+   ============================================================ */
+.metrics-strip {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 22px;
+}
+@media (max-width: 1100px) { .metrics-strip { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px)  { .metrics-strip { grid-template-columns: repeat(2, 1fr); } }
+
+.metric-card {
+  background: var(--bg-surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow-glass);
+  position: relative; overflow: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  animation: cardIn 0.5s ease both;
+}
+.metric-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+}
+.metric-card:hover { border-color: rgba(0,212,255,0.2); box-shadow: var(--shadow-glass), var(--shadow-glow-cyan); }
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.metric-label {
+  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-secondary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.metric-icon { font-size: 12px; opacity: 0.8; }
+.metric-value {
+  font-family: var(--font-display); font-size: 26px; font-weight: 700;
+  line-height: 1; letter-spacing: -0.02em; transition: color 0.4s, text-shadow 0.4s;
+  min-height: 32px;
+}
+.metric-unit { font-size: 11px; font-weight: 400; margin-left: 4px; opacity: 0.55; font-family: var(--font-mono); }
+.metric-sub  { font-size: 10px; color: var(--text-secondary); margin-top: 7px; letter-spacing: 0.05em; }
+
+/* accent bar on left */
+.metric-card::after {
+  content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
+  width: 2px; border-radius: 2px; background: var(--accent-color, var(--cyan));
+  opacity: 0.5;
+}
+
+/* ============================================================
+   CHARTS SECTION
+   ============================================================ */
+.charts-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px;
+}
+@media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--bg-surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 20px 20px 16px;
+  box-shadow: var(--shadow-glass);
+  position: relative; overflow: hidden;
+  animation: cardIn 0.5s ease 0.15s both;
+}
+.chart-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+}
+.chart-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+.chart-title {
+  font-family: var(--font-display); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
+}
+.chart-title-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-color, var(--cyan)); box-shadow: 0 0 8px var(--accent-color, var(--cyan));
+}
+.chart-current-val {
+  font-family: var(--font-display); font-size: 16px; font-weight: 700;
+  color: var(--accent-color, var(--cyan)); letter-spacing: -0.02em;
+}
+.chart-canvas-wrap { height: 140px; position: relative; }
+
+/* ============================================================
+   BOTTOM ROW: CONTROLS + WARNINGS
+   ============================================================ */
+.bottom-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 760px) { .bottom-row { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 22px 22px 20px;
+  box-shadow: var(--shadow-glass);
+  position: relative; overflow: hidden;
+  animation: cardIn 0.5s ease 0.25s both;
+}
+.panel::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+}
+.panel-title {
+  font-family: var(--font-display); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-secondary);
+  margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+}
+.panel-title-bar { width: 18px; height: 2px; background: var(--cyan); border-radius: 2px; }
+
+/* CONTROL BUTTONS */
+.controls-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;
+}
+.ctrl-btn {
+  padding: 13px 8px; border-radius: var(--radius-sm);
+  border: 1px solid; cursor: pointer; font-family: var(--font-display);
+  font-size: 9px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+  transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  position: relative; overflow: hidden;
+}
+.ctrl-btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: currentColor; opacity: 0;
+  transition: opacity 0.2s;
+}
+.ctrl-btn:hover::after { opacity: 0.07; }
+.ctrl-btn:active { transform: scale(0.96); }
+
+.ctrl-btn-icon { font-size: 18px; }
+
+.btn-charge    { background: rgba(0,255,157,0.06);  border-color: rgba(0,255,157,0.3);  color: var(--green); }
+.btn-charge:hover    { background: rgba(0,255,157,0.12);  border-color: rgba(0,255,157,0.55);  box-shadow: 0 0 20px rgba(0,255,157,0.2); }
+.btn-discharge { background: rgba(255,184,0,0.06);  border-color: rgba(255,184,0,0.3);  color: var(--amber); }
+.btn-discharge:hover { background: rgba(255,184,0,0.12);  border-color: rgba(255,184,0,0.55);  box-shadow: 0 0 20px rgba(255,184,0,0.2); }
+.btn-stop      { background: rgba(255,67,101,0.06); border-color: rgba(255,67,101,0.3); color: var(--red); }
+.btn-stop:hover      { background: rgba(255,67,101,0.12); border-color: rgba(255,67,101,0.55); box-shadow: 0 0 20px rgba(255,67,101,0.2); }
+
+.cycles-row {
+  display: flex; gap: 10px; align-items: center;
+  padding-top: 14px; border-top: 1px solid var(--glass-border);
+}
+.cycles-label { font-size: 10px; letter-spacing: 0.1em; color: var(--text-secondary); white-space: nowrap; }
+.cycles-input {
+  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  color: var(--cyan); font-family: var(--font-mono); font-size: 13px;
+  outline: none; transition: border-color 0.2s;
+}
+.cycles-input:focus { border-color: rgba(0,212,255,0.4); box-shadow: 0 0 12px rgba(0,212,255,0.08); }
+.cycles-btn {
+  padding: 9px 16px; border-radius: var(--radius-sm);
+  background: var(--cyan-dim); border: 1px solid rgba(0,212,255,0.3);
+  color: var(--cyan); font-family: var(--font-display); font-size: 9px;
+  font-weight: 600; letter-spacing: 0.15em; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.cycles-btn:hover { background: rgba(0,212,255,0.18); border-color: rgba(0,212,255,0.55); box-shadow: 0 0 16px rgba(0,212,255,0.15); }
+
+/* WARNINGS */
+.warnings-list { display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; }
+.warnings-list::-webkit-scrollbar { width: 4px; }
+.warnings-list::-webkit-scrollbar-track { background: transparent; }
+.warnings-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.warning-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: rgba(255,67,101,0.07); border: 1px solid rgba(255,67,101,0.2);
+  font-size: 11px; color: #fca5a5; line-height: 1.4;
+  animation: warnIn 0.3s ease;
+}
+@keyframes warnIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.warning-icon { font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+.warnings-empty {
+  text-align: center; padding: 28px 0; color: var(--text-secondary); font-size: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.warnings-empty-icon { font-size: 28px; opacity: 0.4; }
+
+/* ============================================================
+   SETTINGS MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(3,7,16,0.85); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  width: 560px; max-width: 95vw; max-height: 85vh; overflow-y: auto;
+  background: rgba(8,14,28,0.95);
+  border: 1px solid rgba(0,212,255,0.18);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04), 0 0 60px rgba(0,212,255,0.06);
+  padding: 28px;
+  transform: translateY(16px) scale(0.98);
+  transition: transform 0.25s ease;
+}
+.modal-overlay.open .modal { transform: translateY(0) scale(1); }
+
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);
+}
+.modal-title { font-family: var(--font-display); font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--cyan); }
+.modal-close {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.modal-close:hover { color: var(--red); border-color: rgba(255,67,101,0.3); }
+
+.settings-section-label {
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--text-secondary); margin-bottom: 10px; margin-top: 18px;
+}
+.settings-section-label:first-of-type { margin-top: 0; }
+
+.setting-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.setting-key {
+  font-size: 10px; color: var(--cyan); font-family: var(--font-mono);
+  min-width: 110px; letter-spacing: 0.05em;
+}
+.setting-method {
+  font-size: 9px; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono);
+  font-weight: 500; letter-spacing: 0.05em; min-width: 42px; text-align: center;
+}
+.method-GET  { background: rgba(0,212,255,0.12);  color: var(--cyan);  border: 1px solid rgba(0,212,255,0.25); }
+.method-POST { background: rgba(0,255,157,0.10);  color: var(--green); border: 1px solid rgba(0,255,157,0.25); }
+
+.setting-input {
+  flex: 1; background: rgba(0,0,0,0.35); border: 1px solid var(--glass-border);
+  border-radius: 8px; padding: 7px 10px;
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+  outline: none; transition: border-color 0.2s;
+}
+.setting-input:focus { border-color: rgba(0,212,255,0.35); }
+
+.setting-desc { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; }
+
+.base-url-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border); }
+.base-url-label { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+.base-url-input {
+  flex: 1; background: rgba(0,0,0,0.35); border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 8px; padding: 9px 12px;
+  color: var(--cyan); font-family: var(--font-mono); font-size: 13px;
+  outline: none; transition: border-color 0.2s;
+}
+.base-url-input:focus { border-color: rgba(0,212,255,0.5); box-shadow: 0 0 12px rgba(0,212,255,0.08); }
+
+.modal-save-btn {
+  width: 100%; margin-top: 22px; padding: 12px;
+  background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,255,157,0.08));
+  border: 1px solid rgba(0,212,255,0.4); border-radius: var(--radius-sm);
+  color: var(--cyan); font-family: var(--font-display); font-size: 10px;
+  font-weight: 600; letter-spacing: 0.2em; cursor: pointer;
+  transition: all 0.2s;
+}
+.modal-save-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,255,157,0.14)); box-shadow: 0 0 24px rgba(0,212,255,0.15); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 28px; right: 28px; z-index: 200;
+  padding: 12px 18px; border-radius: var(--radius-sm);
+  font-size: 12px; letter-spacing: 0.05em; font-family: var(--font-mono);
+  background: rgba(8,14,28,0.95); border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(60px); opacity: 0;
+  transition: all 0.3s ease; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: rgba(0,255,157,0.4); color: var(--green); }
+.toast.error   { border-color: rgba(255,67,101,0.4); color: var(--red); }
+.toast.info    { border-color: rgba(0,212,255,0.4);  color: var(--cyan); }
+
+/* scrollbar global */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Background -->
+<div class="bg-grid"></div>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+<div class="bg-orb bg-orb-3"></div>
+
+<!-- App -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-title">BMS</div>
+        <div class="brand-sub">Battery Management System</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="conn-indicator" class="disconnected">
+        <span class="conn-dot"></span>
+        <span id="conn-text">DISCONNECTED</span>
+      </div>
+      <div id="state-badge" class="state-idle">IDLE</div>
+      <button class="btn-icon" onclick="openSettings()" title="Configure API routes">⚙</button>
+    </div>
+  </header>
+
+  <!-- METRIC STRIP -->
+  <div class="metrics-strip">
+    <div class="metric-card" style="--accent-color: var(--cyan)">
+      <div class="metric-label"><span class="metric-icon">⚡</span>Voltage</div>
+      <div class="metric-value" id="m-voltage" style="color:var(--cyan)">—<span class="metric-unit">V</span></div>
+      <div class="metric-sub" id="m-voltage-sub">Awaiting data</div>
+    </div>
+    <div class="metric-card" style="--accent-color: var(--amber)">
+      <div class="metric-label"><span class="metric-icon">〰</span>Current</div>
+      <div class="metric-value" id="m-current" style="color:var(--amber)">—<span class="metric-unit">A</span></div>
+      <div class="metric-sub" id="m-current-sub">Awaiting data</div>
+    </div>
+    <div class="metric-card" style="--accent-color: #ff6b6b">
+      <div class="metric-label"><span class="metric-icon">🌡</span>Temperature</div>
+      <div class="metric-value" id="m-temp" style="color:#ff6b6b">—<span class="metric-unit">°C</span></div>
+      <div class="metric-sub" id="m-temp-sub">Awaiting data</div>
+    </div>
+    <div class="metric-card" style="--accent-color: var(--green)">
+      <div class="metric-label"><span class="metric-icon">◈</span>State of Charge</div>
+      <div class="metric-value" id="m-soc" style="color:var(--green)">—<span class="metric-unit">%</span></div>
+      <div class="metric-sub" id="m-soc-sub">SOC</div>
+    </div>
+    <div class="metric-card" style="--accent-color: #a78bfa">
+      <div class="metric-label"><span class="metric-icon">◉</span>State of Health</div>
+      <div class="metric-value" id="m-soh" style="color:#a78bfa">—<span class="metric-unit">%</span></div>
+      <div class="metric-sub" id="m-soh-sub">SOH</div>
+    </div>
+    <div class="metric-card" style="--accent-color: #38bdf8">
+      <div class="metric-label"><span class="metric-icon">◷</span>Remaining Life</div>
+      <div class="metric-value" id="m-rul" style="color:#38bdf8; font-size:22px">—<span class="metric-unit">cyc</span></div>
+      <div class="metric-sub" id="m-rul-sub">RUL</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+    <div class="chart-card" style="--accent-color: var(--cyan)">
+      <div class="chart-header">
+        <div class="chart-title">
+          <span class="chart-title-dot"></span>
+          Voltage History
+        </div>
+        <div class="chart-current-val" id="cv-voltage">— V</div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="chart-voltage"></canvas></div>
+    </div>
+    <div class="chart-card" style="--accent-color: var(--amber)">
+      <div class="chart-header">
+        <div class="chart-title">
+          <span class="chart-title-dot" style="background:var(--amber);box-shadow:0 0 8px var(--amber)"></span>
+          Current History
+        </div>
+        <div class="chart-current-val" id="cv-current" style="color:var(--amber)">— A</div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="chart-current"></canvas></div>
+    </div>
+    <div class="chart-card" style="--accent-color:#ff6b6b">
+      <div class="chart-header">
+        <div class="chart-title">
+          <span class="chart-title-dot" style="background:#ff6b6b;box-shadow:0 0 8px #ff6b6b"></span>
+          Temperature History
+        </div>
+        <div class="chart-current-val" id="cv-temp" style="color:#ff6b6b">— °C</div>
+      </div>
+      <div class="chart-canvas-wrap"><canvas id="chart-temp"></canvas></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM ROW -->
+  <div class="bottom-row">
+
+    <!-- CONTROLS -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-bar"></div>Controls</div>
+      <div class="controls-grid">
+        <button class="ctrl-btn btn-charge" onclick="sendCommand('charge')">
+          <span class="ctrl-btn-icon">⬆</span>CHARGE
+        </button>
+        <button class="ctrl-btn btn-discharge" onclick="sendCommand('discharge')">
+          <span class="ctrl-btn-icon">⬇</span>DISCHARGE
+        </button>
+        <button class="ctrl-btn btn-stop" onclick="sendCommand('stop')">
+          <span class="ctrl-btn-icon">⬛</span>STOP
+        </button>
+      </div>
+      <div class="cycles-row">
+        <span class="cycles-label">Cycle Count:</span>
+        <input class="cycles-input" type="number" id="cycles-input" placeholder="e.g. 42" min="0" />
+        <button class="cycles-btn" onclick="updateCycles()">UPDATE</button>
+      </div>
+    </div>
+
+    <!-- WARNINGS -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-bar" style="background:var(--red)"></div>Warnings</div>
+      <div class="warnings-list" id="warnings-list">
+        <div class="warnings-empty">
+          <span class="warnings-empty-icon">✓</span>
+          No active warnings
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settings-modal" onclick="closeSettings(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">⚙ API CONFIGURATION</span>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+
+    <div class="settings-section-label">Base URL</div>
+    <div class="base-url-row">
+      <span class="base-url-label">Backend origin:</span>
+      <input class="base-url-input" id="cfg-base-url" type="text" />
+    </div>
+
+    <div class="settings-section-label">Endpoints</div>
+    <div id="routes-editor"></div>
+
+    <div class="settings-section-label">Polling</div>
+    <div class="setting-row">
+      <span class="setting-key">poll_interval</span>
+      <input class="setting-input" id="cfg-poll" type="number" min="200" step="100" />
+      <span class="setting-desc">ms</span>
+    </div>
+    <div class="setting-row">
+      <span class="setting-key">history_len</span>
+      <input class="setting-input" id="cfg-history" type="number" min="10" max="300" step="10" />
+      <span class="setting-desc">points</span>
+    </div>
+
+    <button class="modal-save-btn" onclick="saveSettings()">APPLY CHANGES</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   ██████╗  ██████╗ ██╗   ██╗████████╗███████╗███████╗
+   ██╔══██╗██╔═══██╗██║   ██║╚══██╔══╝██╔════╝██╔════╝
+   ██████╔╝██║   ██║██║   ██║   ██║   █████╗  ███████╗
+   ██╔══██╗██║   ██║██║   ██║   ██║   ██╔══╝  ╚════██║
+   ██║  ██║╚██████╔╝╚██████╔╝   ██║   ███████╗███████║
+   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝╚══════╝
+
+   EDIT THIS CONFIG BLOCK TO CHANGE API ROUTES
+   ============================================================ */
+
+const CONFIG = {
+  // Base URL of your FastAPI backend
+  BASE_URL: "http://localhost:8000",
+
+  // How often to poll data (milliseconds)
+  POLL_INTERVAL_MS: 1000,
+
+  // How many data points to keep in charts
+  HISTORY_LENGTH: 60,
+
+  // API Routes — edit path/method to match your backend
+  ROUTES: {
+    ping: {
+      method: "GET",
+      path: "/",
+      desc: "Connectivity check"
+    },
+    data: {
+      method: "GET",
+      path: "/data",
+      desc: "Live sensor data (voltage, current, temperature)"
+    },
+    state: {
+      method: "GET",
+      path: "/state",
+      desc: "Battery state + warning messages"
+    },
+    charge: {
+      method: "POST",
+      path: "/charge",
+      desc: "Start charging"
+    },
+    discharge: {
+      method: "POST",
+      path: "/discharge",
+      desc: "Start discharging"
+    },
+    stop: {
+      method: "POST",
+      path: "/stop",
+      desc: "Manual stop"
+    },
+    soc: {
+      method: "GET",
+      path: "/s_o_c",
+      desc: "State of Charge"
+    },
+    soh: {
+      method: "GET",
+      path: "/s_o_h",
+      desc: "State of Health"
+    },
+    rul: {
+      method: "GET",
+      path: "/r_u_l",
+      desc: "Remaining Useful Life"
+    },
+    cycles: {
+      method: "POST",
+      path: "/cycles",
+      desc: "Update cycle count"
+    }
+  }
+};
+
+/* ============================================================
+   API LAYER — all requests go through here
+   ============================================================ */
+async function api(routeKey, { params = {}, body = null } = {}) {
+  const route = CONFIG.ROUTES[routeKey];
+  if (!route) throw new Error(`Unknown route key: ${routeKey}`);
+
+  let url = CONFIG.BASE_URL + route.path;
+
+  // Append query params for GET with params
+  if (Object.keys(params).length) {
+    const qs = new URLSearchParams(params).toString();
+    url += "?" + qs;
+  }
+
+  const opts = { method: route.method, headers: {} };
+  if (body != null) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
+  return res.json();
+}
+
+/* ============================================================
+   CHART SETUP
+   ============================================================ */
+const CHART_DEFAULTS = {
+  borderWidth: 2,
+  pointRadius: 0,
+  pointHoverRadius: 4,
+  tension: 0.4,
+  fill: true,
+};
+
+function makeGradient(ctx, color) {
+  const g = ctx.createLinearGradient(0, 0, 0, 140);
+  g.addColorStop(0, color.replace(")", ", 0.35)").replace("rgb", "rgba"));
+  g.addColorStop(1, color.replace(")", ", 0.0)").replace("rgb", "rgba"));
+  return g;
+}
+
+function buildChart(canvasId, color, label, unit) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  const grad = makeGradient(ctx, color);
+
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: Array(CONFIG.HISTORY_LENGTH).fill(""),
+      datasets: [{
+        label,
+        data: Array(CONFIG.HISTORY_LENGTH).fill(null),
+        borderColor: color,
+        backgroundColor: grad,
+        ...CHART_DEFAULTS,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 200 },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(6,13,26,0.92)",
+          borderColor: color + "55",
+          borderWidth: 1,
+          titleColor: "#64748b",
+          bodyColor: color,
+          titleFont: { family: "'JetBrains Mono', monospace", size: 10 },
+          bodyFont:  { family: "'JetBrains Mono', monospace", size: 12, weight: "bold" },
+          padding: 10,
+          callbacks: {
+            title: (items) => `T-${CONFIG.HISTORY_LENGTH - items[0].dataIndex}s`,
+            label:  (item)  => ` ${item.raw != null ? item.raw.toFixed(4) : "—"} ${unit}`,
+          }
+        }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          display: true,
+          grid: { color: "rgba(255,255,255,0.04)", drawBorder: false },
+          ticks: {
+            color: "#334155",
+            font: { family: "'JetBrains Mono', monospace", size: 9 },
+            maxTicksLimit: 4,
+            callback: v => v.toFixed(1),
+          },
+          border: { display: false },
+        }
+      }
+    }
+  });
+}
+
+const charts = {
+  voltage: buildChart("chart-voltage", "rgb(0,212,255)",   "Voltage",     "V"),
+  current: buildChart("chart-current", "rgb(255,184,0)",   "Current",     "A"),
+  temp:    buildChart("chart-temp",    "rgb(255,107,107)", "Temperature", "°C"),
+};
+
+function pushChartData(chartKey, value) {
+  const chart = charts[chartKey];
+  const data  = chart.data.datasets[0].data;
+  data.push(value);
+  if (data.length > CONFIG.HISTORY_LENGTH) data.shift();
+  chart.update("none");
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let connected = false;
+let pollTimer  = null;
+
+function setConnected(val) {
+  connected = val;
+  const el   = document.getElementById("conn-indicator");
+  const text = document.getElementById("conn-text");
+  el.className    = val ? "connected" : "disconnected";
+  text.textContent = val ? "CONNECTED" : "DISCONNECTED";
+}
+
+function setState(state) {
+  const badge = document.getElementById("state-badge");
+  const s     = (state || "idle").toLowerCase();
+  badge.textContent = s.toUpperCase();
+  badge.className   = `state-${s}`;
+}
+
+/* ============================================================
+   DATA UPDATERS
+   ============================================================ */
+function setMetric(id, value, decimals = 2) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Preserve the unit span
+  const unit = el.querySelector(".metric-unit");
+  const unitHtml = unit ? unit.outerHTML : "";
+  el.innerHTML = (value != null ? Number(value).toFixed(decimals) : "—") + unitHtml;
+}
+
+function setMetricText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function updateWarnings(messages) {
+  const list = document.getElementById("warnings-list");
+  if (!messages || messages.length === 0) {
+    list.innerHTML = `<div class="warnings-empty">
+      <span class="warnings-empty-icon">✓</span>No active warnings
+    </div>`;
+    return;
+  }
+  list.innerHTML = messages.map(msg => `
+    <div class="warning-item">
+      <span class="warning-icon">⚠</span>
+      <span>${msg}</span>
+    </div>
+  `).join("");
+}
+
+/* ============================================================
+   POLLING LOOPS
+   ============================================================ */
+async function fetchData() {
+  try {
+    const d = await api("data");
+    setConnected(true);
+
+    // Metrics
+    setMetric("m-voltage", d.voltage, 3);
+    setMetric("m-current", d.current, 3);
+    setMetric("m-temp",    d.temperature, 2);
+
+    // Sublabels
+    setMetricText("m-voltage-sub", d.voltage != null ? (d.voltage > 0 ? "Nominal" : "Low") : "—");
+    setMetricText("m-current-sub", d.current != null ? (d.current > 0 ? "Flowing" : "Idle")  : "—");
+    setMetricText("m-temp-sub",    d.temperature != null ? (d.temperature > 40 ? "⚠ Hot" : "Normal") : "—");
+
+    // Chart live labels
+    document.getElementById("cv-voltage").textContent = d.voltage != null ? d.voltage.toFixed(3) + " V" : "—";
+    document.getElementById("cv-current").textContent = d.current != null ? d.current.toFixed(3) + " A" : "—";
+    document.getElementById("cv-temp").textContent    = d.temperature != null ? d.temperature.toFixed(2) + " °C" : "—";
+
+    // Push to charts
+    pushChartData("voltage", d.voltage);
+    pushChartData("current", d.current);
+    pushChartData("temp",    d.temperature);
+
+  } catch {
+    setConnected(false);
+  }
+}
+
+async function fetchState() {
+  try {
+    const s = await api("state");
+    setState(s.state);
+    updateWarnings(s.warning_messages);
+  } catch { /* silent */ }
+}
+
+async function fetchSOC() {
+  try {
+    const r = await api("soc");
+    if (typeof r.s_o_c === "number") {
+      setMetric("m-soc", r.s_o_c, 1);
+      setMetricText("m-soc-sub", r.s_o_c > 80 ? "High" : r.s_o_c > 30 ? "Good" : "Low");
+    } else {
+      document.getElementById("m-soc").innerHTML = `<span style="font-size:11px;color:var(--text-secondary)">${r.s_o_c}</span>`;
+    }
+  } catch { /* silent */ }
+}
+
+async function fetchSOH() {
+  try {
+    const r = await api("soh");
+    if (typeof r.s_o_h === "number") {
+      setMetric("m-soh", r.s_o_h, 1);
+      setMetricText("m-soh-sub", r.s_o_h > 80 ? "Healthy" : r.s_o_h > 50 ? "Degraded" : "Critical");
+    } else {
+      document.getElementById("m-soh").innerHTML = `<span style="font-size:11px;color:var(--text-secondary)">${r.s_o_h}</span>`;
+    }
+  } catch { /* silent */ }
+}
+
+async function fetchRUL() {
+  try {
+    const r = await api("rul");
+    if (typeof r.r_u_l === "number") {
+      setMetric("m-rul", r.r_u_l, 0);
+    } else {
+      document.getElementById("m-rul").innerHTML = `<span style="font-size:11px;color:var(--text-secondary)">${r.r_u_l}</span>`;
+    }
+  } catch { /* silent */ }
+}
+
+async function pollAll() {
+  await fetchData();
+  await fetchState();
+  await fetchSOC();
+  await fetchSOH();
+  await fetchRUL();
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollAll();
+  pollTimer = setInterval(pollAll, CONFIG.POLL_INTERVAL_MS);
+}
+
+/* ============================================================
+   CONTROL COMMANDS
+   ============================================================ */
+async function sendCommand(routeKey) {
+  try {
+    const res = await api(routeKey);
+    setState(res.state);
+    showToast(res.message || `${routeKey} OK`, "success");
+    // Refresh state & metrics immediately
+    fetchState();
+    fetchSOC(); fetchSOH(); fetchRUL();
+  } catch (e) {
+    showToast(`Command failed: ${e.message}`, "error");
+  }
+}
+
+async function updateCycles() {
+  const val = parseInt(document.getElementById("cycles-input").value, 10);
+  if (isNaN(val) || val < 0) { showToast("Enter a valid cycle count", "error"); return; }
+  try {
+    await api("cycles", { params: { count: val } });
+    showToast(`Cycle count set to ${val}`, "success");
+    fetchSOH(); fetchRUL();
+  } catch (e) {
+    showToast(`Failed: ${e.message}`, "error");
+  }
+}
+
+/* ============================================================
+   SETTINGS MODAL
+   ============================================================ */
+function openSettings() {
+  // Populate inputs from CONFIG
+  document.getElementById("cfg-base-url").value = CONFIG.BASE_URL;
+  document.getElementById("cfg-poll").value     = CONFIG.POLL_INTERVAL_MS;
+  document.getElementById("cfg-history").value  = CONFIG.HISTORY_LENGTH;
+
+  const editor = document.getElementById("routes-editor");
+  editor.innerHTML = Object.entries(CONFIG.ROUTES).map(([key, r]) => `
+    <div class="setting-row">
+      <span class="setting-key">${key}</span>
+      <span class="setting-method method-${r.method}">${r.method}</span>
+      <input class="setting-input" data-route="${key}" value="${r.path}" placeholder="${r.path}" />
+      <span class="setting-desc" title="${r.desc}" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.desc}</span>
+    </div>
+  `).join("");
+
+  document.getElementById("settings-modal").classList.add("open");
+}
+
+function closeSettings(e) {
+  if (!e || e.target === document.getElementById("settings-modal")) {
+    document.getElementById("settings-modal").classList.remove("open");
+  }
+}
+
+function saveSettings() {
+  CONFIG.BASE_URL         = document.getElementById("cfg-base-url").value.replace(/\/$/, "");
+  CONFIG.POLL_INTERVAL_MS = parseInt(document.getElementById("cfg-poll").value, 10) || 1000;
+  CONFIG.HISTORY_LENGTH   = parseInt(document.getElementById("cfg-history").value, 10) || 60;
+
+  document.querySelectorAll("[data-route]").forEach(inp => {
+    const key = inp.dataset.route;
+    if (CONFIG.ROUTES[key]) CONFIG.ROUTES[key].path = inp.value.trim() || CONFIG.ROUTES[key].path;
+  });
+
+  // Resize chart history buffers
+  Object.values(charts).forEach(ch => {
+    const d = ch.data.datasets[0].data;
+    const l = ch.data.labels;
+    while (d.length > CONFIG.HISTORY_LENGTH) { d.shift(); l.shift(); }
+    while (d.length < CONFIG.HISTORY_LENGTH) { d.unshift(null); l.unshift(""); }
+  });
+
+  closeSettings();
+  startPolling();
+  showToast("Configuration saved", "info");
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+let toastTimer = null;
+function showToast(msg, type = "info") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = "toast"; }, 3000);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+startPolling();
+</script>
+</body>
+</html>

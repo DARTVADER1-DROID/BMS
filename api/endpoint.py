@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from model import Battery, battery_data
+from api.model import Battery, battery_data
 import asyncio
 from contextlib import asynccontextmanager
 

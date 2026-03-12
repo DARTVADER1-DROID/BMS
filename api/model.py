@@ -141,7 +141,7 @@ class Battery:
         return battery_data(voltage = self.voltage, 
                             current = self.current, 
                             temperature = self.temperature, 
-                            time= self.time, 
+                            time= self.lastseen, 
                             hardware_connection = self.hardware_connection)
     
     def get_state(self):

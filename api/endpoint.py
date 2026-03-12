@@ -96,8 +96,9 @@ async def cycles(count: int):
     b1.update_cycle_count(count)
     return {"message": "Cycle count updated"}
 
-
-
+@app.get("/hardware_connection")
+async def hardware_connection():
+    return {"hardware_connection": b1.hardware_connection}
 
 #-------------backend - Hardware  communication----------------
 

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from model import Battery, battery_data
 import asyncio
 from contextlib import asynccontextmanager
-
+from mangum import Mangum
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -104,7 +104,7 @@ async def get_state_hardware():
     return {"state": b1.get_state()}
 
 
-
+handler = Mangum(app)
 
 
 

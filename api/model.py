@@ -13,17 +13,13 @@ class battery_data(BaseModel):
     hardware_connection : bool 
 
 
-
-
-
-
 class Battery:
     def __init__(self):
 
         #default initializations
         self.voltage : float = 3.7
         self.current : float = 0
-        self.temperature :float = 27
+        self.temperature : float = 27
 
 
         #safe operating limits
@@ -42,9 +38,9 @@ class Battery:
         self.possible_states = {"charging", "discharging", "idle"}
         self.state : str = "idle"
         self.possible_transitions = {
-            "charging" : { "idle"},
-            "discharging" : { "idle"},
-            "idle" : {"charging", "discharging"}
+            "charging"    : {"idle"},
+            "discharging" : {"idle"},
+            "idle"        : {"charging", "discharging"}
         }
 
 
@@ -53,7 +49,7 @@ class Battery:
 
 
         #lifetime tracker
-        self.lastseen = time.time()
+        self.lastseen : float = time.time()         # timestamp of last /update from hardware
         self.hardware_connection : bool = False
         self.rated_useful_life : float = 1000
         self.cycle_count : int = 112
@@ -87,9 +83,6 @@ class Battery:
         self.warning_messages = "Nominal"
         return True
     
-
-    
-    
     def s_o_h(self):
         data = 0.000088875 * ((self.cycle_count - 760.58) ** 2) + (math.log(self.cycle_count / 3.97379) ** 2) + 47.917
         self.state_of_health = data
@@ -109,23 +102,23 @@ class Battery:
         if self.validate_safety():
             self.validate_transition("charging")
     
-    
     def start_discharging(self):
         if self.validate_safety():
             self.validate_transition("discharging")
     
-    
     def check_stop(self):
         if not self.validate_safety():
             self.validate_transition("idle")
-        if self.lastseen - time.time() > 3:
+
+        # FIX: was (self.lastseen - time.time() > 3) — always negative, never triggered
+        # FIX: now correctly measures seconds elapsed since last /update from hardware
+        if time.time() - self.lastseen > 3:
             self.validate_transition("idle")
             self.hardware_connection = False
 
     def auto_stop(self):
         if self.voltage >= self.voltage_max or self.voltage <= self.voltage_min:
             self.validate_transition("idle") 
-        
 
     def manual_stop(self):
         self.validate_transition("idle")
@@ -134,15 +127,17 @@ class Battery:
         self.voltage = battery_data.voltage
         self.current = battery_data.current
         self.temperature = battery_data.temperature
-        self.time = time.time()
+        # FIX: was (self.time = time.time()) — updated wrong field, lastseen was never refreshed
+        # FIX: now correctly updates lastseen so check_stop() timeout resets on each /update
+        self.lastseen = time.time()
         self.hardware_connection = True
 
     def get_data(self):
-        return battery_data(voltage = self.voltage, 
-                            current = self.current, 
-                            temperature = self.temperature, 
-                            time= self.lastseen, 
-                            hardware_connection = self.hardware_connection)
+        return battery_data(voltage=self.voltage, 
+                            current=self.current, 
+                            temperature=self.temperature, 
+                            time=self.lastseen, 
+                            hardware_connection=self.hardware_connection)
     
     def get_state(self):
         return self.state
@@ -157,14 +152,3 @@ class Battery:
         if self.state != "charging" and self.state != "discharging":
             return True
         return False
-    
-
-      
-    
-    
-            
-        
-        
-
-
-    

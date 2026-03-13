@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Battery Cycle Counter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=Lato:wght@300;400&display=swap" rel="stylesheet"/>
+<style>
+/* ─── RESET ─────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+img,svg{display:block;max-width:100%}
+
+/* ─── TOKENS ─────────────────────────────────── */
+:root{
+  --bg:#080806;
+  --bg1:#0e0d0a;
+  --bg2:#151410;
+  --bg3:#1d1b15;
+  --gold:#c9a84c;
+  --gold2:#e8c56a;
+  --gold3:#f5dfa0;
+  --gold4:#faf0d0;
+  --gold-dim:rgba(201,168,76,0.1);
+  --gold-glow:rgba(201,168,76,0.22);
+  --border:rgba(201,168,76,0.13);
+  --border-b:rgba(201,168,76,0.3);
+  --red:#e05252;
+  --red-dim:rgba(224,82,82,0.1);
+  --green:#52a878;
+  --green-dim:rgba(82,168,120,0.1);
+  --txt:#e8e0cc;
+  --txt-m:#7a7060;
+  --txt-d:#3a342a;
+  --fc:'Cinzel',serif;
+  --fm:'IBM Plex Mono',monospace;
+  --fl:'Lato',sans-serif;
+  --shadow-lg:0 20px 80px rgba(0,0,0,0.8),0 0 0 1px rgba(201,168,76,0.08);
+}
+
+/* ─── BASE ───────────────────────────────────── */
+html{
+  /* always scroll, never clip */
+  overflow-y:auto;
+  min-height:100%;
+  background:var(--bg);
+}
+body{
+  font-family:var(--fl);
+  color:var(--txt);
+  min-height:100vh;
+  /* padding-block gives breathing room on all sizes */
+  padding:clamp(20px,5vw,60px) clamp(12px,5vw,24px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  /* don't use justify-content:center — kills scroll on short viewports */
+  -webkit-font-smoothing:antialiased;
+  position:relative;
+}
+button,input{font-family:var(--fm);-webkit-tap-highlight-color:transparent}
+
+/* ─── BACKGROUND LAYERS ──────────────────────── */
+.bg-lines{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(201,168,76,0.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(201,168,76,0.035) 1px,transparent 1px);
+  background-size:52px 52px;
+}
+.bg-glow{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(201,168,76,0.055) 0%,transparent 65%);
+}
+.bg-vignette{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 100% 100% at 50% 50%,transparent 42%,rgba(0,0,0,0.72) 100%);
+}
+
+/* ─── ANIMATIONS ─────────────────────────────── */
+@keyframes scale-in{from{opacity:0;transform:scale(0.94) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes glow-ring{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,0),opacity:1}50%{box-shadow:0 0 24px 4px rgba(201,168,76,0.18);opacity:0.85}}
+@keyframes flicker{0%,100%{opacity:0.7}50%{opacity:0.4}}
+@keyframes tick-pop{0%{transform:scale(0) rotate(-15deg);opacity:0}65%{transform:scale(1.2) rotate(4deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes toast-in{from{opacity:0;transform:translateY(12px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes spinner{to{transform:rotate(360deg)}}
+
+/* ─── CARD ───────────────────────────────────── */
+#card{
+  position:relative;
+  z-index:1;
+  /* full width on small screens, capped on large */
+  width:100%;
+  max-width:460px;
+  /* NO overflow:hidden — causes clipping */
+  background:linear-gradient(155deg,var(--bg2) 0%,var(--bg1) 55%,var(--bg3) 100%);
+  border:1px solid var(--border-b);
+  border-radius:20px;
+  /* fluid padding: 24px min, scales up */
+  padding:28px 24px 32px;
+  box-shadow:var(--shadow-lg);
+  animation:scale-in 0.5s cubic-bezier(0.34,1.3,0.64,1) both;
+}
+/* top shimmer line */
+#card::before{
+  content:'';position:absolute;top:0;left:12%;right:12%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold2),var(--gold),var(--gold2),transparent);
+  opacity:0.5;pointer-events:none;border-radius:0;
+}
+/* subtle inner glow */
+#card::after{
+  content:'';position:absolute;inset:0;border-radius:20px;pointer-events:none;
+  background:linear-gradient(155deg,rgba(201,168,76,0.035) 0%,transparent 45%);
+}
+
+/* ─── CORNER ORNAMENTS ───────────────────────── */
+.corner{position:absolute;width:16px;height:16px;border-color:rgba(201,168,76,0.35);border-style:solid}
+.c-tl{top:12px;left:12px;border-width:1px 0 0 1px}
+.c-tr{top:12px;right:12px;border-width:1px 1px 0 0}
+.c-bl{bottom:12px;left:12px;border-width:0 0 1px 1px}
+.c-br{bottom:12px;right:12px;border-width:0 1px 1px 0}
+
+/* ─── ICON ───────────────────────────────────── */
+.icon-wrap{display:flex;justify-content:center;margin-bottom:22px;animation:fade-up 0.4s ease 0.05s both}
+.icon-outer{position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--border-b);animation:glow-ring 3s ease-in-out infinite}
+.icon-spin{position:absolute;inset:-4px;border-radius:50%;border:1px solid transparent;border-top-color:var(--gold);border-right-color:var(--gold2);animation:spin 8s linear infinite;opacity:0.4}
+.icon-core{
+  width:50px;height:50px;border-radius:50%;
+  background:linear-gradient(135deg,var(--bg3),var(--bg2));
+  border:1px solid var(--border-b);
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;z-index:1;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 4px 14px rgba(0,0,0,0.4);
+}
+
+/* ─── TITLE BLOCK ────────────────────────────── */
+.title-block{text-align:center;margin-bottom:22px;animation:fade-up 0.4s ease 0.1s both}
+.eyebrow{
+  font-family:var(--fm);font-size:9px;
+  /* tighter letter-spacing so it fits on 320px */
+  letter-spacing:0.18em;
+  text-transform:uppercase;color:var(--gold);opacity:0.7;
+  margin-bottom:8px;
+  /* prevent overflow */
+  word-break:break-word;overflow-wrap:break-word;
+}
+.title{
+  font-family:var(--fc);
+  font-size:clamp(17px,4.5vw,24px);
+  font-weight:600;letter-spacing:0.06em;
+  color:var(--gold3);line-height:1.25;
+  word-break:break-word;overflow-wrap:break-word;
+}
+.subtitle{
+  font-family:var(--fm);font-size:10.5px;color:var(--txt-m);
+  letter-spacing:0.04em;margin-top:9px;line-height:1.6;
+  word-break:break-word;overflow-wrap:break-word;
+}
+
+/* ─── DIVIDER ────────────────────────────────── */
+.divider{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:20px;animation:fade-up 0.4s ease 0.15s both;
+}
+.div-line{flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border-b),transparent)}
+.div-diamond{width:5px;height:5px;background:var(--gold);transform:rotate(45deg);flex-shrink:0;opacity:0.45}
+
+/* ─── CURRENT CYCLES DISPLAY ─────────────────── */
+.current-wrap{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+  background:rgba(0,0,0,0.32);border:1px solid var(--border);border-radius:12px;
+  padding:14px 18px;margin-bottom:20px;
+  animation:fade-up 0.4s ease 0.18s both;
+  /* prevent internal overflow */
+  min-width:0;
+}
+.current-left{min-width:0;flex:1}
+.current-label{
+  font-family:var(--fm);font-size:8.5px;letter-spacing:0.18em;
+  text-transform:uppercase;color:var(--txt-m);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.current-val{
+  font-family:var(--fc);
+  font-size:clamp(20px,6vw,30px);
+  font-weight:600;color:var(--gold2);letter-spacing:0.05em;
+  line-height:1.15;margin-top:4px;
+  word-break:break-all;
+}
+.current-fetching{
+  font-family:var(--fm);font-size:11px;color:var(--txt-m);
+  margin-top:4px;animation:flicker 1.4s ease-in-out infinite;
+}
+.current-unit{
+  font-family:var(--fm);font-size:10px;color:var(--txt-m);
+  flex-shrink:0;align-self:flex-end;padding-bottom:2px;
+}
+
+/* ─── INPUT SECTION ──────────────────────────── */
+.input-section{margin-bottom:18px;animation:fade-up 0.4s ease 0.22s both}
+.input-label{
+  display:block;
+  font-family:var(--fm);font-size:8.5px;font-weight:500;
+  letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--gold);opacity:0.8;margin-bottom:9px;
+}
+
+/* input + steppers row — steppers below on very small screens */
+.input-row{
+  display:flex;gap:8px;align-items:stretch;
+}
+.cycle-input{
+  flex:1;min-width:0;width:100%;
+  background:rgba(0,0,0,0.42);
+  border:1px solid var(--border-b);border-radius:12px;
+  padding:14px 16px;
+  color:var(--gold3);font-family:var(--fc);
+  font-size:clamp(20px,6vw,30px);
+  font-weight:400;letter-spacing:0.04em;outline:none;
+  transition:border-color 0.2s,box-shadow 0.2s,background 0.2s;
+  /* hide browser spin arrows */
+  -moz-appearance:textfield;appearance:textfield;
+}
+.cycle-input::-webkit-outer-spin-button,
+.cycle-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.cycle-input::placeholder{color:var(--txt-d);font-weight:300}
+.cycle-input:focus{
+  border-color:var(--gold);background:rgba(0,0,0,0.52);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.1),0 0 22px rgba(201,168,76,0.07);
+}
+.cycle-input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
+
+.steppers{display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+.step-btn{
+  width:42px;height:42px;border-radius:10px;
+  background:var(--gold-dim);border:1px solid var(--border-b);
+  color:var(--gold2);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.16s;user-select:none;
+  line-height:1;
+}
+.step-btn:hover{background:rgba(201,168,76,0.18);border-color:var(--gold);box-shadow:0 0 12px var(--gold-glow)}
+.step-btn:active{transform:scale(0.93)}
+
+/* on very narrow screens, hide the steppers (keyboard is fine) */
+@media(max-width:340px){.steppers{display:none}}
+
+/* ─── QUICK PRESETS ──────────────────────────── */
+.presets-section{margin-bottom:18px;animation:fade-up 0.4s ease 0.26s both}
+.presets-label{
+  font-family:var(--fm);font-size:8.5px;letter-spacing:0.18em;
+  text-transform:uppercase;color:var(--txt-m);
+  display:block;margin-bottom:8px;
+}
+.presets-row{
+  display:flex;flex-wrap:wrap;gap:6px;
+}
+.preset{
+  padding:6px 12px;border-radius:7px;
+  background:rgba(0,0,0,0.28);border:1px solid var(--border);
+  color:var(--txt-m);font-family:var(--fm);font-size:11px;
+  cursor:pointer;transition:all 0.16s;
+  /* prevent text from clipping */
+  white-space:nowrap;
+}
+.preset:hover{background:var(--gold-dim);color:var(--gold2);border-color:var(--border-b)}
+.preset:active{transform:scale(0.95)}
+
+/* ─── SUBMIT BUTTON ──────────────────────────── */
+.submit-btn{
+  width:100%;
+  padding:16px 20px;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(201,168,76,0.15) 0%,rgba(201,168,76,0.08) 100%);
+  border:1px solid var(--gold);
+  color:var(--gold3);
+  font-family:var(--fc);
+  font-size:clamp(12px,3.5vw,14px);
+  font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+  cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;
+  animation:fade-up 0.4s ease 0.3s both;
+  /* always fits text */
+  white-space:nowrap;
+}
+.submit-btn::before{
+  content:'';position:absolute;inset:0;
+  background:rgba(201,168,76,0.12);opacity:0;transition:opacity 0.2s;
+  pointer-events:none;
+}
+.submit-btn:hover:not(:disabled){box-shadow:0 0 28px var(--gold-glow),0 6px 20px rgba(0,0,0,0.4);transform:translateY(-2px)}
+.submit-btn:hover:not(:disabled)::before{opacity:1}
+.submit-btn:active:not(:disabled){transform:scale(0.98) translateY(0)}
+.submit-btn:disabled{opacity:0.45;cursor:not-allowed;transform:none!important}
+.submit-inner{display:flex;align-items:center;justify-content:center;gap:10px;position:relative;z-index:1}
+/* spinner inside button */
+.spin-ico{
+  width:15px;height:15px;border-radius:50%;
+  border:2px solid rgba(201,168,76,0.25);border-top-color:var(--gold);
+  animation:spinner 0.7s linear infinite;
+  display:none;flex-shrink:0;
+}
+.submit-btn.loading .spin-ico{display:block}
+.submit-btn.loading .btn-label{opacity:0.5}
+/* success */
+.check-ico{display:none;font-size:18px;animation:tick-pop 0.35s cubic-bezier(0.34,1.56,0.64,1) both}
+.submit-btn.success .check-ico{display:block}
+.submit-btn.success .btn-label,.submit-btn.success .spin-ico{display:none}
+.submit-btn.success{background:linear-gradient(135deg,rgba(82,168,120,0.18),rgba(82,168,120,0.08));border-color:var(--green);box-shadow:0 0 24px rgba(82,168,120,0.18)}
+
+/* ─── STATUS ROW ─────────────────────────────── */
+.status-row{
+  display:flex;align-items:center;justify-content:center;
+  flex-wrap:wrap;gap:8px 16px;
+  margin-top:20px;
+  animation:fade-up 0.4s ease 0.34s both;
+}
+.status-item{
+  display:flex;align-items:center;gap:6px;
+  font-family:var(--fm);font-size:9.5px;letter-spacing:0.08em;color:var(--txt-m);
+  white-space:nowrap;
+}
+.sdot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--txt-d);flex-shrink:0;transition:all 0.3s;
+}
+.sdot.ok{background:var(--green);box-shadow:0 0 7px rgba(82,168,120,0.5)}
+.sdot.err{background:var(--red)}
+.status-sep{color:var(--txt-d);font-size:12px}
+
+/* ─── CONFIG LINK ────────────────────────────── */
+.config-row{
+  text-align:center;margin-top:14px;
+  animation:fade-up 0.4s ease 0.38s both;
+}
+.config-link{
+  font-family:var(--fm);font-size:9px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--txt-d);cursor:pointer;
+  background:none;border:none;padding:4px;
+  border-bottom:1px solid transparent;transition:all 0.2s;
+}
+.config-link:hover{color:var(--gold);border-bottom-color:rgba(201,168,76,0.3)}
+
+/* ─── MODAL ──────────────────────────────────── */
+.overlay{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(4,4,2,0.88);backdrop-filter:blur(12px);
+  display:flex;align-items:flex-start;justify-content:center;
+  /* flex-start + padding so modal never clips on short screens */
+  padding:clamp(16px,5vw,40px) clamp(12px,5vw,24px);
+  overflow-y:auto;
+  opacity:0;pointer-events:none;transition:opacity 0.2s;
+}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{
+  width:100%;max-width:460px;
+  background:var(--bg2);
+  border:1px solid var(--border-b);border-radius:18px;
+  box-shadow:var(--shadow-lg);
+  padding:clamp(18px,5vw,26px);
+  transform:translateY(14px) scale(0.97);
+  transition:transform 0.22s cubic-bezier(0.34,1.4,0.64,1);
+  /* ensure modal itself scrolls if very long */
+  overflow:hidden;
+}
+.overlay.open .modal{transform:translateY(0) scale(1)}
+.mhead{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:16px;padding-bottom:13px;border-bottom:1px solid var(--border);
+}
+.mtitle{font-family:var(--fc);font-size:13px;font-weight:600;letter-spacing:0.1em;color:var(--gold2)}
+.mx{
+  width:28px;height:28px;border-radius:8px;
+  background:rgba(0,0,0,0.3);border:1px solid var(--border);
+  color:var(--txt-m);cursor:pointer;font-size:13px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;flex-shrink:0;
+}
+.mx:hover{color:var(--red);border-color:rgba(224,82,82,0.35)}
+.csec{
+  font-family:var(--fm);font-size:8px;font-weight:500;
+  letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);opacity:0.7;
+  margin:14px 0 7px;padding-bottom:4px;border-bottom:1px solid rgba(201,168,76,0.1);
+}
+.cfg-row{
+  display:flex;align-items:center;gap:8px;margin-bottom:7px;
+  flex-wrap:wrap;
+}
+.cfg-lbl{
+  font-family:var(--fm);font-size:9px;color:var(--txt-m);
+  width:90px;flex-shrink:0;letter-spacing:0.06em;
+}
+.cfg-in{
+  flex:1;min-width:120px;
+  background:rgba(0,0,0,0.42);border:1px solid var(--border);border-radius:9px;
+  padding:8px 12px;color:var(--gold3);font-family:var(--fm);font-size:12px;outline:none;
+  transition:border-color 0.18s;
+}
+.cfg-in:focus{border-color:var(--gold);box-shadow:0 0 8px rgba(201,168,76,0.08)}
+.save-btn{
+  width:100%;margin-top:16px;padding:12px;
+  background:var(--gold-dim);border:1px solid var(--border-b);border-radius:11px;
+  color:var(--gold2);font-family:var(--fc);font-size:11px;font-weight:600;
+  letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;
+}
+.save-btn:hover{background:rgba(201,168,76,0.17);box-shadow:0 0 18px var(--gold-glow)}
+
+/* ─── TOASTS ─────────────────────────────────── */
+.toast-wrap{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  z-index:200;
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  width:calc(100% - 32px);max-width:380px;
+  pointer-events:none;
+}
+.toast{
+  width:100%;padding:11px 18px;border-radius:11px;
+  font-family:var(--fm);font-size:11px;font-weight:400;letter-spacing:0.06em;
+  background:rgba(21,20,16,0.97);border:1px solid var(--border-b);
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  text-align:center;
+  opacity:0;transform:translateY(12px) scale(0.97);
+  transition:all 0.28s cubic-bezier(0.34,1.4,0.64,1);
+}
+.toast.show{opacity:1;transform:translateY(0) scale(1)}
+.toast.ok{border-color:rgba(82,168,120,0.45);color:var(--green)}
+.toast.fail{border-color:rgba(224,82,82,0.45);color:var(--red)}
+.toast.info{border-color:var(--border-b);color:var(--gold2)}
+
+/* ─── SCROLLBAR ──────────────────────────────── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(201,168,76,0.18);border-radius:99px}
+</style>
+</head>
+<body>
+
+<!-- background layers -->
+<div class="bg-lines"></div>
+<div class="bg-glow"></div>
+<div class="bg-vignette"></div>
+
+<!-- main card -->
+<div id="card">
+  <div class="corner c-tl"></div>
+  <div class="corner c-tr"></div>
+  <div class="corner c-bl"></div>
+  <div class="corner c-br"></div>
+
+  <!-- icon -->
+  <div class="icon-wrap">
+    <div class="icon-outer">
+      <div class="icon-ring"></div>
+      <div class="icon-spin"></div>
+      <div class="icon-core">🔄</div>
+    </div>
+  </div>
+
+  <!-- title -->
+  <div class="title-block">
+    <p class="eyebrow">Battery Management System</p>
+    <h1 class="title">Cycle Counter</h1>
+    <p class="subtitle">Enter the number of charge–discharge cycles completed by the battery.</p>
+  </div>
+
+  <div class="divider">
+    <div class="div-line"></div>
+    <div class="div-diamond"></div>
+    <div class="div-line"></div>
+  </div>
+
+  <!-- current logged value -->
+  <div class="current-wrap">
+    <div class="current-left">
+      <div class="current-label">Current Logged Cycles</div>
+      <div class="current-fetching" id="current-fetching">Fetching…</div>
+      <div class="current-val" id="current-val" style="display:none">—</div>
+    </div>
+    <div class="current-unit">cycles</div>
+  </div>
+
+  <!-- input -->
+  <div class="input-section">
+    <label class="input-label" for="cyc-input">New Cycle Count</label>
+    <div class="input-row">
+      <input
+        class="cycle-input" id="cyc-input"
+        type="number" min="0" max="99999"
+        placeholder="0"
+        inputmode="numeric" pattern="[0-9]*"
+        oninput="onInput(this)"
+      />
+      <div class="steppers">
+        <button class="step-btn" onclick="step(1)" aria-label="Increase">+</button>
+        <button class="step-btn" onclick="step(-1)" aria-label="Decrease">−</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- presets -->
+  <div class="presets-section">
+    <span class="presets-label">Quick set</span>
+    <div class="presets-row">
+      <button class="preset" onclick="setPreset(10)">10</button>
+      <button class="preset" onclick="setPreset(25)">25</button>
+      <button class="preset" onclick="setPreset(50)">50</button>
+      <button class="preset" onclick="setPreset(100)">100</button>
+      <button class="preset" onclick="setPreset(200)">200</button>
+      <button class="preset" onclick="setPreset(500)">500</button>
+    </div>
+  </div>
+
+  <!-- submit -->
+  <button class="submit-btn" id="submit-btn" onclick="submitCycles()">
+    <div class="submit-inner">
+      <div class="spin-ico"></div>
+      <span class="check-ico">✓</span>
+      <span class="btn-label">Update Cycle Count</span>
+    </div>
+  </button>
+
+  <!-- status -->
+  <div class="status-row">
+    <div class="status-item">
+      <div class="sdot" id="dot-sv"></div>
+      <span id="lbl-sv">Server —</span>
+    </div>
+    <div class="status-sep">·</div>
+    <div class="status-item">
+      <div class="sdot" id="dot-hw"></div>
+      <span id="lbl-hw">Hardware —</span>
+    </div>
+  </div>
+
+  <!-- config link -->
+  <div class="config-row">
+    <button class="config-link" onclick="openCfg()">Configure API endpoint</button>
+  </div>
+</div><!-- #card -->
+
+<!-- config modal -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead">
+      <span class="mtitle">API Configuration</span>
+      <button class="mx" onclick="closeCfg()">✕</button>
+    </div>
+    <div class="csec">Backend</div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Base URL</span>
+      <input class="cfg-in" id="cfg-url" type="url" placeholder="https://…"/>
+    </div>
+    <div class="csec">Routes</div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Cycles path</span>
+      <input class="cfg-in" id="cfg-cyc" type="text" placeholder="/cycles"/>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Ping path</span>
+      <input class="cfg-in" id="cfg-ping" type="text" placeholder="/"/>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">HW path</span>
+      <input class="cfg-in" id="cfg-hw" type="text" placeholder="/hardware_connection"/>
+    </div>
+    <button class="save-btn" onclick="saveCfg()">Save Configuration</button>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const CFG = {
+  BASE_URL:     "https://bms-production-2a2c.up.railway.app",
+  CYCLES_PATH:  "/cycles",
+  PING_PATH:    "/",
+  HW_PATH:      "/hardware_connection"
+};
+
+/* ── API ── */
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(CFG.BASE_URL + path, opts);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+/* ── STATUS ── */
+async function checkStatus() {
+  try {
+    await fetch(CFG.BASE_URL + CFG.PING_PATH);
+    setDot("dot-sv", "ok"); setLbl("lbl-sv", "Server Online");
+  } catch {
+    setDot("dot-sv", "err"); setLbl("lbl-sv", "Server Offline");
+  }
+  try {
+    const r = await apiFetch(CFG.HW_PATH);
+    const ok = r.hardware_connection === true || r.hardware_connection === 1 || r.hardware_connection === "true";
+    setDot("dot-hw", ok ? "ok" : "err");
+    setLbl("lbl-hw", ok ? "Hardware Linked" : "Hardware Offline");
+  } catch {
+    setDot("dot-hw", "err"); setLbl("lbl-hw", "Hardware —");
+  }
+}
+
+function setDot(id, cls) { document.getElementById(id).className = "sdot " + cls; }
+function setLbl(id, txt) { document.getElementById(id).textContent = txt; }
+
+function showCurrentVal(val) {
+  document.getElementById("current-fetching").style.display = "none";
+  const el = document.getElementById("current-val");
+  el.style.display = "block";
+  el.textContent = (val !== null && val !== undefined) ? val : "—";
+}
+
+/* ── INPUT HANDLERS ── */
+function onInput(el) {
+  el.classList.remove("err");
+  const v = parseInt(el.value, 10);
+  if (el.value !== "" && (isNaN(v) || v < 0)) el.classList.add("err");
+}
+
+function step(delta) {
+  const inp = document.getElementById("cyc-input");
+  inp.value = Math.max(0, (parseInt(inp.value, 10) || 0) + delta);
+  inp.classList.remove("err");
+}
+
+function setPreset(val) {
+  document.getElementById("cyc-input").value = val;
+  document.getElementById("cyc-input").classList.remove("err");
+}
+
+/* ── SUBMIT ── */
+async function submitCycles() {
+  const inp = document.getElementById("cyc-input");
+  const btn = document.getElementById("submit-btn");
+  const val = parseInt(inp.value, 10);
+
+  if (inp.value === "" || isNaN(val) || val < 0) {
+    inp.classList.add("err");
+    showToast("Please enter a valid cycle count", "fail");
+    return;
+  }
+
+  btn.classList.add("loading");
+  btn.disabled = true;
+
+  try {
+    await apiFetch(CFG.CYCLES_PATH + "?count=" + val, { method: "POST" });
+    btn.classList.remove("loading");
+    btn.classList.add("success");
+    showCurrentVal(val);
+    showToast("Cycle count updated to " + val, "ok");
+    setTimeout(() => { btn.classList.remove("success"); btn.disabled = false; }, 2400);
+  } catch (e) {
+    btn.classList.remove("loading");
+    btn.disabled = false;
+    inp.classList.add("err");
+    showToast("Update failed: " + e.message, "fail");
+  }
+}
+
+/* ── CONFIG MODAL ── */
+function openCfg() {
+  document.getElementById("cfg-url").value  = CFG.BASE_URL;
+  document.getElementById("cfg-cyc").value  = CFG.CYCLES_PATH;
+  document.getElementById("cfg-ping").value = CFG.PING_PATH;
+  document.getElementById("cfg-hw").value   = CFG.HW_PATH;
+  document.getElementById("overlay").classList.add("open");
+}
+function closeCfg() { document.getElementById("overlay").classList.remove("open"); }
+function overlayClick(e) { if (e.target === document.getElementById("overlay")) closeCfg(); }
+function saveCfg() {
+  CFG.BASE_URL    = document.getElementById("cfg-url").value.trim().replace(/\/$/, "");
+  CFG.CYCLES_PATH = document.getElementById("cfg-cyc").value.trim()  || "/cycles";
+  CFG.PING_PATH   = document.getElementById("cfg-ping").value.trim() || "/";
+  CFG.HW_PATH     = document.getElementById("cfg-hw").value.trim()   || "/hardware_connection";
+  closeCfg();
+  checkStatus();
+  showToast("Configuration saved", "info");
+}
+
+/* ── TOAST ── */
+function showToast(msg, type = "info") {
+  const wrap = document.getElementById("toast-wrap");
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("show")));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 320);
+  }, 3000);
+}
+
+/* ── KEYBOARD ── */
+document.getElementById("cyc-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") submitCycles();
+});
+
+/* ── INIT ── */
+showCurrentVal(null);
+checkStatus();
+setInterval(checkStatus, 10000);
+</script>
+</body>
+</html>

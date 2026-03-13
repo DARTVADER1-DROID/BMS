@@ -23,12 +23,12 @@ class Battery:
 
 
         #safe operating limits
-        self.voltage_max : float = 4.2
-        self.voltage_min : float = 2.5
+        self.voltage_max : float = 10
+        self.voltage_min : float = 0
         self.current_max : float = 5.0
         self.current_min : float = -5.0
-        self.temperature_max : float = 45
-        self.temperature_min : float = -20
+        self.temperature_max : float = 100
+        self.temperature_min : float = -50
 
 
         #battery state

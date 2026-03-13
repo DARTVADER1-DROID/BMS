@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "frontend/*.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/volttrack",  "dest": "/frontend-a-volttrack.html" },
+    { "src": "/rul",        "dest": "/frontend-b-rul.html" },
+    { "src": "/cycles",     "dest": "/frontend-c-cycles.html" },
+    { "src": "/(.*)",       "dest": "/$1" }
+  ]
+}

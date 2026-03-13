@@ -34,9 +34,9 @@ const int TEMP_SENSOR_PIN    = 34;  // ADC1_6
 // ── Timing Configuration ─────────────────────────────────────
 // Heartbeat (POST /update) fires fast and independently — keeps lastseen fresh
 // State poll (GET /state) can be slower — only needed for relay decisions
-const unsigned long HEARTBEAT_INTERVAL     = 800;   // 0.8s — well under the 3s backend timeout
-const unsigned long STATE_POLL_INTERVAL    = 3000;  // 3s — relay state sync
-const unsigned long SENSOR_UPDATE_INTERVAL = 500;   // 0.5s — local sensor reads
+const unsigned long HEARTBEAT_INTERVAL     = 100;   // 0.1s — well under the 3s backend timeout
+const unsigned long STATE_POLL_INTERVAL    = 200;  // 3s — relay state sync
+const unsigned long SENSOR_UPDATE_INTERVAL = 300;   // 0.5s — local sensor reads
 const unsigned long WIFI_RECONNECT_DELAY   = 5000;  // 5s
 
 unsigned long lastHeartbeat          = 0;

@@ -23,12 +23,12 @@ class Battery:
 
 
         #safe operating limits
-        self.voltage_max : float = 4.2
-        self.voltage_min : float = 3.2
-        self.current_max : float = 2
-        self.current_min : float = -2
-        self.temperature_max : float = 40
-        self.temperature_min : float = 0
+        self.voltage_max : float = 10
+        self.voltage_min : float = -10
+        self.current_max : float = 10
+        self.current_min : float = -10
+        self.temperature_max : float = 100
+        self.temperature_min : float = -100
 
 
         #battery state
@@ -112,7 +112,7 @@ class Battery:
 
         # FIX: was (self.lastseen - time.time() > 3) — always negative, never triggered
         # FIX: now correctly measures seconds elapsed since last /update from hardware
-        if time.time() - self.lastseen > 3:
+        if time.time() - self.lastseen > 10:
             self.validate_transition("idle")
             self.hardware_connection = False
 

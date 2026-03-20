@@ -112,7 +112,7 @@ class Battery:
 
         # FIX: was (self.lastseen - time.time() > 3) — always negative, never triggered
         # FIX: now correctly measures seconds elapsed since last /update from hardware
-        if time.time() - self.lastseen > 10:
+        if time.time() - self.lastseen > 3:
             self.validate_transition("idle")
             self.hardware_connection = False
 

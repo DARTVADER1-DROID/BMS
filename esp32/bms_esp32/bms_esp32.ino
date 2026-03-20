@@ -15,8 +15,8 @@ Hardware Connections:
 #include <WiFiClientSecure.h>
 
 // ── WiFi Configuration ───────────────────────────────────────
-const char* WIFI_SSID     = "Airtel_bala_1093";
-const char* WIFI_PASSWORD = "Air@75272";
+const char* WIFI_SSID     = "DESKTOP-lol";
+const char* WIFI_PASSWORD = "12345678";
 
 // ── API Configuration ────────────────────────────────────────
 const char* API_HOST = "bms-production-2a2c.up.railway.app";

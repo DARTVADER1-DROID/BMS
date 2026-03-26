@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.model import Battery, battery_data
 import asyncio
 from contextlib import asynccontextmanager
+import httpx
 
 
 @asynccontextmanager
@@ -100,6 +101,42 @@ async def cycles(count: int):
 async def hardware_connection():
     return {"hardware_connection": b1.hardware_connection}
 
+@app.post("/ai-suggestions")
+async def ai_suggestions():
+    
+    
+    GEMINI_API_KEY = "AIzaSyBOp8yZbJE8-KiFCw_F-9KIGQ0eYIZ4RJE"
+    GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_API_KEY}"
+
+    user_input = f"voltage: {b1.voltage}V, current: {b1.current}A, temperature: {b1.temperature}C"
+    
+    
+    
+    payload = {
+    "system_instruction": { "parts": [{"text": "You are an advanced bms software model, your task is to infer the v,c,t data and provide some usefull suggestions for the user, the suggestion must be related to battery safety, checking if battery is connected properly to the bms hardware, fault detection suggetions(if any fault infered), give a crisp and fast response."}] },
+
+
+    "contents": [{"parts": [{"text": user_input}]}],
+    "generationConfig": { "temperature": 0.7 }
+    }
+    
+    
+    
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(GEMINI_URL, json=payload, timeout=20.0)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extract the specific text from the Gemini response structure
+        answer = data["candidates"][0]["content"]["parts"][0]["text"]
+        
+        return {"status": "success", "response": answer}
+
+
+
+
 #-------------backend - Hardware  communication----------------
 
 @app.post("/update")
@@ -115,6 +152,8 @@ async def update_battery(data: battery_data):
 @app.get("/state-hardware")
 async def get_state_hardware():
     return {"state": b1.get_state()}
+
+
 
 
 

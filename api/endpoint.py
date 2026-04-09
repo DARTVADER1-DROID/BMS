@@ -103,40 +103,52 @@ async def hardware_connection():
 
 @app.post("/ai-suggestions")
 async def ai_suggestions():
-    
-    
     GEMINI_API_KEY = "AIzaSyBOp8yZbJE8-KiFCw_F-9KIGQ0eYIZ4RJE"
-    GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_API_KEY}"
+    
+    # Switch BACK to v1beta because Flash is currently hosted there
+    GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
-    user_input = f"voltage: {b1.voltage}V, current: {b1.current}A, temperature: {b1.temperature}C"
-    
-    
+    user_input = (
+        f"DATA: Voltage: {b1.voltage}V, Current: {b1.current}A, Temperature: {b1.temperature}C, "
+        f"Hardware: {b1.hardware_connection}, State: {b1.get_state()}"
+    )
     
     payload = {
-    "system_instruction": { "parts": [{"text": "You are an advanced bms software model, your task is to infer the v,c,t data and provide some usefull suggestions for the user, the suggestion must be related to battery safety, checking if battery is connected properly to the bms hardware, fault detection suggetions(if any fault infered), give a crisp and fast response."}] },
-
-
-    "contents": [{"parts": [{"text": user_input}]}],
-    "generationConfig": { "temperature": 0.7 }
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{
+                    "text": "INSTRUCTIONS: You are a BMS safety model. Analyze V, C, T data for a 3.7V Li-ion system. Provide crisp safety advice."
+                }]
+            },
+            {
+                "role": "model",
+                "parts": [{"text": "Understood. Send the data."}]
+            },
+            {
+                "role": "user",
+                "parts": [{"text": user_input}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 300
+        }
     }
-    
-    
-    
-    
+
     async with httpx.AsyncClient() as client:
-        response = await client.post(GEMINI_URL, json=payload, timeout=20.0)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        # Extract the specific text from the Gemini response structure
-        answer = data["candidates"][0]["content"]["parts"][0]["text"]
-        
-        return {"status": "success", "response": answer}
+        try:
+            # We use v1beta now
+            response = await client.post(GEMINI_URL, json=payload, timeout=20.0)
+            response.raise_for_status()
+            
+            data = response.json()
+            answer = data["candidates"][0]["content"]["parts"][0]["text"]
+            return {"status": "success", "response": answer}
 
-
-
-
+        except httpx.HTTPStatusError as e:
+            # If this fails, look at the 'detail' in your console
+            return {"status": "error", "code": e.response.status_code, "detail": e.response.text}
 #-------------backend - Hardware  communication----------------
 
 @app.post("/update")

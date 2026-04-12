@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.model import Battery, battery_data
 import asyncio
 from contextlib import asynccontextmanager
+import httpx
 
 
 @asynccontextmanager
@@ -100,6 +101,54 @@ async def cycles(count: int):
 async def hardware_connection():
     return {"hardware_connection": b1.hardware_connection}
 
+@app.post("/ai-suggestions")
+async def ai_suggestions():
+    GEMINI_API_KEY = "AIzaSyBOp8yZbJE8-KiFCw_F-9KIGQ0eYIZ4RJE"
+    
+    # Switch BACK to v1beta because Flash is currently hosted there
+    GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+
+    user_input = (
+        f"DATA: Voltage: {b1.voltage}V, Current: {b1.current}A, Temperature: {b1.temperature}C, "
+        f"Hardware: {b1.hardware_connection}, State: {b1.get_state()}"
+    )
+    
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{
+                    "text": "INSTRUCTIONS: You are a BMS safety model. Analyze V, C, T data for a 3.7V Li-ion system. Provide crisp safety advice."
+                }]
+            },
+            {
+                "role": "model",
+                "parts": [{"text": "Understood. Send the data."}]
+            },
+            {
+                "role": "user",
+                "parts": [{"text": user_input}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 300
+        }
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # We use v1beta now
+            response = await client.post(GEMINI_URL, json=payload, timeout=20.0)
+            response.raise_for_status()
+            
+            data = response.json()
+            answer = data["candidates"][0]["content"]["parts"][0]["text"]
+            return {"status": "success", "response": answer}
+
+        except httpx.HTTPStatusError as e:
+            # If this fails, look at the 'detail' in your console
+            return {"status": "error", "code": e.response.status_code, "detail": e.response.text}
 #-------------backend - Hardware  communication----------------
 
 @app.post("/update")
@@ -115,6 +164,8 @@ async def update_battery(data: battery_data):
 @app.get("/state-hardware")
 async def get_state_hardware():
     return {"state": b1.get_state()}
+
+
 
 
 

@@ -19,7 +19,7 @@ const char* WIFI_SSID     = "DESKTOP-lol";
 const char* WIFI_PASSWORD = "12345678";
 
 // ── API Configuration ────────────────────────────────────────
-const char* API_HOST = "https://bms-production-017f.up.railway.app";
+const char* API_HOST = "bms-production-017f.up.railway.app";
 const int   API_PORT = 443;  // HTTPS
 
 // ── GPIO Pin Configuration ───────────────────────────────────

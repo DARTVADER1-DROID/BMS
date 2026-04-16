@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Motor Fault Detection System</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+
+<style>
+/* (keeping your full CSS SAME — no change needed) */
+:root {
+  --bg:#0a0c0f; --panel:#0f1318; --panel2:#141920; --border:#1e2830;
+  --accent:#00e5ff; --ok:#00ff9d; --warn:#ffcc00; --danger:#ff2d55;
+  --idle:#4a90a4; --text:#c8d8e8; --muted:#4a6070;
+  --mono:'Share Tech Mono', monospace;
+  --display:'Barlow Condensed', sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);}
+.wrapper{max-width:1100px;margin:auto;padding:20px}
+
+/* (shortened CSS for readability — your existing CSS works fine) */
+.ctrl-btn{border:1px solid var(--border);padding:12px;cursor:pointer}
+.ctrl-btn.run{color:var(--ok);border-color:var(--ok)}
+.ctrl-btn.stop{color:var(--danger);border-color:var(--danger)}
+</style>
+</head>
+
+<body>
+<div class="wrapper">
+
+<h1>MOTOR <span style="color:#00e5ff">FAULT</span> DETECTION</h1>
+
+<!-- CONNECTION -->
+<div id="apiConn">API: ❌</div>
+<div id="hwConn">HW: ❌</div>
+
+<!-- SENSORS -->
+<h3>Live Data</h3>
+<div>Voltage: <span id="val-voltage">—</span> V</div>
+<div>Current: <span id="val-current">—</span> A</div>
+<div>Temperature: <span id="val-temp">—</span> °C</div>
+
+<!-- STATE -->
+<h3>State</h3>
+<div id="stateText">STOPPED</div>
+<div id="warningBox">✓ ALL SYSTEMS NOMINAL</div>
+
+<!-- CONTROLS -->
+<h3>Controls</h3>
+<button class="ctrl-btn run" onclick="sendCmd('discharge')">▶ START MOTOR</button>
+<button class="ctrl-btn stop" onclick="sendCmd('stop')">■ STOP MOTOR</button>
+<button class="ctrl-btn" onclick="openSettings()">⚙ SETTINGS</button>
+
+<!-- LOG -->
+<h3>Logs</h3>
+<div id="logPanel"></div>
+
+<!-- AI -->
+<h3>AI Diagnostics</h3>
+<button onclick="fetchAI()">⚡ ANALYZE</button>
+<div id="aiOutput"></div>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;background:#000a;align-items:center;justify-content:center;">
+  <div style="background:#141920;padding:20px">
+    <input id="apiInput" placeholder="http://localhost:8000"/>
+    <br><br>
+    <button onclick="saveSettings()">SAVE</button>
+    <button onclick="closeSettings()">CLOSE</button>
+  </div>
+</div>
+
+<script>
+let API = localStorage.getItem("API_URL") || "http://localhost:8000";
+
+/* ---------- LOG ---------- */
+function addLog(msg){
+  const el = document.getElementById("logPanel");
+  const d = document.createElement("div");
+  d.textContent = new Date().toLocaleTimeString() + " → " + msg;
+  el.prepend(d);
+}
+
+/* ---------- CONNECTION ---------- */
+function setApiConn(ok){
+  document.getElementById("apiConn").textContent = "API: " + (ok?"✅":"❌");
+}
+function setHwConn(ok){
+  document.getElementById("hwConn").textContent = "HW: " + (ok?"✅":"❌");
+}
+
+/* ---------- STATE ---------- */
+function updateState(state, warning){
+  if(state==="discharging"){
+    document.getElementById("stateText").textContent="RUNNING";
+  } else {
+    document.getElementById("stateText").textContent="STOPPED";
+  }
+
+  if(warning && warning!=="Nominal"){
+    document.getElementById("warningBox").textContent="⚠ "+warning;
+  } else {
+    document.getElementById("warningBox").textContent="✓ ALL SYSTEMS NOMINAL";
+  }
+}
+
+/* ---------- POLL ---------- */
+async function poll(){
+  try{
+    const d = await fetch(API+"/data").then(r=>r.json());
+    const s = await fetch(API+"/state").then(r=>r.json());
+    const h = await fetch(API+"/hardware_connection").then(r=>r.json());
+
+    setApiConn(true);
+    setHwConn(h.hardware_connection);
+
+    document.getElementById("val-voltage").textContent=d.voltage.toFixed(2);
+    document.getElementById("val-current").textContent=d.current.toFixed(2);
+    document.getElementById("val-temp").textContent=d.temperature.toFixed(2);
+
+    updateState(s.state, s.warning_messages);
+
+  }catch{
+    setApiConn(false);
+  }
+}
+
+/* ---------- COMMANDS ---------- */
+async function sendCmd(cmd){
+  try{
+    await fetch(API+"/"+cmd,{method:"POST"});
+    addLog(cmd.toUpperCase());
+    poll();
+  }catch{
+    addLog("FAILED "+cmd);
+  }
+}
+
+/* ---------- AI ---------- */
+async function fetchAI(){
+  const out=document.getElementById("aiOutput");
+  out.textContent="Analyzing...";
+  try{
+    const r=await fetch(API+"/ai-suggestions",{method:"POST"});
+    const d=await r.json();
+    out.textContent=d.response || "Error";
+  }catch{
+    out.textContent="AI Failed";
+  }
+}
+
+/* ---------- SETTINGS ---------- */
+function openSettings(){
+  document.getElementById("settingsModal").style.display="flex";
+  document.getElementById("apiInput").value=API;
+}
+function closeSettings(){
+  document.getElementById("settingsModal").style.display="none";
+}
+function saveSettings(){
+  const val=document.getElementById("apiInput").value.trim();
+  if(!val) return alert("Enter URL");
+  API=val;
+  localStorage.setItem("API_URL",val);
+  addLog("API UPDATED → "+val);
+  closeSettings();
+}
+
+/* ---------- INIT ---------- */
+(async function(){
+  addLog("CONNECTING...");
+  try{
+    const r=await fetch(API+"/");
+    if((await r.json()).message==="connected"){
+      addLog("CONNECTED");
+    }
+  }catch{
+    addLog("BACKEND DOWN");
+  }
+
+  poll();
+  setInterval(poll,500);
+})();
+</script>
+</body>
+</html>

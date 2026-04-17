@@ -4,186 +4,1035 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Motor Fault Detection System</title>
-
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
-
 <style>
-/* (keeping your full CSS SAME — no change needed) */
-:root {
-  --bg:#0a0c0f; --panel:#0f1318; --panel2:#141920; --border:#1e2830;
-  --accent:#00e5ff; --ok:#00ff9d; --warn:#ffcc00; --danger:#ff2d55;
-  --idle:#4a90a4; --text:#c8d8e8; --muted:#4a6070;
-  --mono:'Share Tech Mono', monospace;
-  --display:'Barlow Condensed', sans-serif;
-}
-body{background:var(--bg);color:var(--text);font-family:var(--mono);}
-.wrapper{max-width:1100px;margin:auto;padding:20px}
+  :root {
+    --bg: #0a0c0f;
+    --panel: #0f1318;
+    --panel2: #141920;
+    --border: #1e2830;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --ok: #00ff9d;
+    --warn: #ffcc00;
+    --danger: #ff2d55;
+    --idle: #4a90a4;
+    --text: #c8d8e8;
+    --muted: #4a6070;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Barlow Condensed', sans-serif;
+  }
 
-/* (shortened CSS for readability — your existing CSS works fine) */
-.ctrl-btn{border:1px solid var(--border);padding:12px;cursor:pointer}
-.ctrl-btn.run{color:var(--ok);border-color:var(--ok)}
-.ctrl-btn.stop{color:var(--danger);border-color:var(--danger)}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid noise bg */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 28px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .header-left h1 span { color: var(--accent); }
+
+  .header-left p {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .conn-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .conn-badge.connected { border-color: var(--ok); color: var(--ok); }
+  .conn-badge.connected .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .conn-badge.disconnected { border-color: var(--danger); color: var(--danger); }
+  .conn-badge.disconnected .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── MAIN GRID ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 12px;
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  .panel.warn-active::before { background: var(--warn); opacity: 1; }
+  .panel.danger-active::before { background: var(--danger); opacity: 1; }
+  .panel.ok-active::before { background: var(--ok); opacity: 1; }
+
+  .panel-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ── SENSOR CARDS ── */
+  .sensors-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .sensor-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .sensor-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.5s ease;
+  }
+
+  .sensor-card.active::after { transform: scaleX(1); }
+  .sensor-card.warn-val { border-color: var(--warn) !important; }
+  .sensor-card.warn-val::after { background: var(--warn); transform: scaleX(1); }
+  .sensor-card.danger-val { border-color: var(--danger) !important; }
+  .sensor-card.danger-val::after { background: var(--danger); transform: scaleX(1); }
+
+  .sensor-icon {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .sensor-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .sensor-value {
+    font-family: var(--display);
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .sensor-unit {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* BAR ── */
+  .sensor-bar {
+    margin-top: 12px;
+    height: 3px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sensor-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.6s ease, background 0.3s;
+    width: 0%;
+  }
+
+  /* ── STATE PANEL ── */
+  .state-panel {
+    grid-column: 1 / 2;
+  }
+
+  .state-display {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .state-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.3rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid;
+    width: fit-content;
+    transition: all 0.3s;
+  }
+
+  .state-badge.idle { border-color: var(--idle); color: var(--idle); }
+  .state-badge.running { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 20px rgba(0,255,157,0.15); }
+  .state-badge.braking { border-color: var(--warn); color: var(--warn); box-shadow: 0 0 20px rgba(255,204,0,0.15); }
+  .state-badge.fault { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 20px rgba(255,45,85,0.2); }
+
+  .warning-box {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: var(--panel2);
+    transition: all 0.3s;
+  }
+
+  .warning-box.alert {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: rgba(255,45,85,0.05);
+    animation: flash 1s infinite;
+  }
+
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* ── METRICS PANEL ── */
+  .metrics-panel {
+    grid-column: 2 / 3;
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.72rem;
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+
+  .metric-key {
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-size: 0.62rem;
+  }
+
+  .metric-val {
+    font-family: var(--display);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .metric-val.ok { color: var(--ok); }
+  .metric-val.warn { color: var(--warn); }
+  .metric-val.danger { color: var(--danger); }
+
+  /* ── HW PANEL ── */
+  .hw-panel {
+    grid-column: 3 / 4;
+  }
+
+  .hw-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hw-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .hw-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+  }
+
+  .hw-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .hw-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 2s infinite; }
+  .hw-dot.off { background: var(--danger); }
+
+  /* ── CONTROLS ── */
+  .controls-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .ctrl-btn {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 14px 10px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .ctrl-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .ctrl-btn:hover { color: #fff; }
+
+  .ctrl-btn.run { border-color: var(--ok); color: var(--ok); }
+  .ctrl-btn.run::before { background: rgba(0,255,157,0.07); }
+  .ctrl-btn.run:hover { background: rgba(0,255,157,0.12); box-shadow: 0 0 20px rgba(0,255,157,0.2); }
+  .ctrl-btn.run::before { opacity: 1; }
+
+  .ctrl-btn.brake { border-color: var(--warn); color: var(--warn); }
+  .ctrl-btn.brake::before { background: rgba(255,204,0,0.07); opacity: 1; }
+  .ctrl-btn.brake:hover { background: rgba(255,204,0,0.12); box-shadow: 0 0 20px rgba(255,204,0,0.2); }
+
+  .ctrl-btn.stop { border-color: var(--danger); color: var(--danger); }
+  .ctrl-btn.stop::before { background: rgba(255,45,85,0.07); opacity: 1; }
+  .ctrl-btn.stop:hover { background: rgba(255,45,85,0.12); box-shadow: 0 0 20px rgba(255,45,85,0.2); }
+
+  .ctrl-btn:active { transform: scale(0.97); }
+
+  /* ── AI PANEL ── */
+  .ai-panel {
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 20px;
+    position: relative;
+  }
+
+  .ai-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .ai-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .ai-title {
+    font-family: var(--display);
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ai-fetch-btn {
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ai-fetch-btn:hover { background: rgba(0,229,255,0.08); box-shadow: 0 0 16px rgba(0,229,255,0.2); }
+  .ai-fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .ai-output {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    font-size: 0.73rem;
+    line-height: 1.7;
+    color: var(--text);
+    min-height: 80px;
+    white-space: pre-wrap;
+    position: relative;
+  }
+
+  .ai-output .placeholder { color: var(--muted); }
+
+  .spinner {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border: 1px solid var(--muted);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 4px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── CYCLES ROW ── */
+  .cycles-row {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .cycles-panel {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .cycles-panel label {
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .cycles-panel input {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    width: 90px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .cycles-panel input:focus { border-color: var(--accent); }
+
+  .cycles-panel button {
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .cycles-panel button:hover { background: rgba(0,229,255,0.08); }
+
+  /* ── HISTORY LOG ── */
+  .log-panel {
+    flex: 2;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .log-panel::-webkit-scrollbar { width: 4px; }
+  .log-panel::-webkit-scrollbar-track { background: var(--border); }
+  .log-panel::-webkit-scrollbar-thumb { background: var(--muted); }
+
+  .log-entry {
+    font-size: 0.65rem;
+    color: var(--muted);
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(30,40,48,0.5);
+    display: flex;
+    gap: 10px;
+  }
+
+  .log-entry .log-time { color: var(--accent); opacity: 0.6; }
+  .log-entry.log-ok .log-msg { color: var(--ok); }
+  .log-entry.log-warn .log-msg { color: var(--warn); }
+  .log-entry.log-danger .log-msg { color: var(--danger); }
+
+  /* ── FAULT INDICATOR ── */
+  .fault-ring {
+    position: relative;
+    width: 64px; height: 64px;
+    flex-shrink: 0;
+  }
+
+  .fault-ring svg { width: 100%; height: 100%; }
+
+  .fault-ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ok);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .main-grid { grid-template-columns: 1fr 1fr; }
+    .sensors-row { grid-template-columns: 1fr 1fr; }
+    .state-panel, .metrics-panel, .hw-panel { grid-column: auto; }
+    .controls-row { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .sensors-row { grid-template-columns: 1fr; }
+    .controls-row { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
-
 <body>
 <div class="wrapper">
 
-<h1>MOTOR <span style="color:#00e5ff">FAULT</span> DETECTION</h1>
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <h1>MOTOR <span>FAULT</span> DETECTION</h1>
+      <p>Real-time diagnostics &amp; protection system</p>
+    </div>
+    <div class="header-right">
+      <div class="conn-badge disconnected" id="apiConn">
+        <span class="dot"></span> API
+      </div>
+      <div class="conn-badge disconnected" id="hwConn">
+        <span class="dot"></span> HARDWARE
+      </div>
+    </div>
+  </header>
 
-<!-- CONNECTION -->
-<div id="apiConn">API: ❌</div>
-<div id="hwConn">HW: ❌</div>
+  <!-- MAIN GRID -->
+  <div class="main-grid">
 
-<!-- SENSORS -->
-<h3>Live Data</h3>
-<div>Voltage: <span id="val-voltage">—</span> V</div>
-<div>Current: <span id="val-current">—</span> A</div>
-<div>Temperature: <span id="val-temp">—</span> °C</div>
+    <!-- SENSOR CARDS -->
+    <div class="sensors-row">
+      <!-- Voltage → EMF Voltage -->
+      <div class="sensor-card" id="card-voltage">
+        <span class="sensor-icon">⚡</span>
+        <div class="sensor-label">EMF Voltage</div>
+        <div class="sensor-value" id="val-voltage">—</div>
+        <div class="sensor-unit">V  (nominal 3.7V)</div>
+        <div class="sensor-bar"><div class="sensor-bar-fill" id="bar-voltage"></div></div>
+      </div>
 
-<!-- STATE -->
-<h3>State</h3>
-<div id="stateText">STOPPED</div>
-<div id="warningBox">✓ ALL SYSTEMS NOMINAL</div>
+      <!-- Current → Drive Current -->
+      <div class="sensor-card" id="card-current">
+        <span class="sensor-icon">〰️</span>
+        <div class="sensor-label">Drive Current</div>
+        <div class="sensor-value" id="val-current">—</div>
+        <div class="sensor-unit">A  (±10A range)</div>
+        <div class="sensor-bar"><div class="sensor-bar-fill" id="bar-current"></div></div>
+      </div>
 
-<!-- CONTROLS -->
-<h3>Controls</h3>
-<button class="ctrl-btn run" onclick="sendCmd('discharge')">▶ START MOTOR</button>
-<button class="ctrl-btn stop" onclick="sendCmd('stop')">■ STOP MOTOR</button>
-<button class="ctrl-btn" onclick="openSettings()">⚙ SETTINGS</button>
+      <!-- Temperature → Winding Temp -->
+      <div class="sensor-card" id="card-temp">
+        <span class="sensor-icon">🌡️</span>
+        <div class="sensor-label">Winding Temperature</div>
+        <div class="sensor-value" id="val-temp">—</div>
+        <div class="sensor-unit">°C  (limit 100°C)</div>
+        <div class="sensor-bar"><div class="sensor-bar-fill" id="bar-temp"></div></div>
+      </div>
+    </div>
 
-<!-- LOG -->
-<h3>Logs</h3>
-<div id="logPanel"></div>
+    <!-- STATE -->
+    <div class="panel state-panel" id="statePanel">
+      <div class="panel-label">Motor State</div>
+      <div class="state-display">
+        <div class="state-badge idle" id="stateBadge">
+          <span id="stateIcon">●</span>
+          <span id="stateText">IDLE</span>
+        </div>
+        <div class="warning-box" id="warningBox">
+          ✓ ALL SYSTEMS NOMINAL
+        </div>
+      </div>
+    </div>
 
-<!-- AI -->
-<h3>AI Diagnostics</h3>
-<button onclick="fetchAI()">⚡ ANALYZE</button>
-<div id="aiOutput"></div>
+    <!-- METRICS: SOC→Torque Load, SOH→Efficiency, RUL→Service Life -->
+    <div class="panel metrics-panel">
+      <div class="panel-label">Performance Metrics</div>
+      <div class="metric-row">
+        <span class="metric-key">Torque Load %</span>
+        <span class="metric-val" id="metric-soc">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-key">Motor Efficiency %</span>
+        <span class="metric-val" id="metric-soh">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-key">Service Life (cycles)</span>
+        <span class="metric-val" id="metric-rul">—</span>
+      </div>
+    </div>
 
-</div>
+    <!-- HARDWARE STATUS -->
+    <div class="panel hw-panel">
+      <div class="panel-label">Hardware Link</div>
+      <div class="hw-indicator">
+        <div class="hw-row">
+          <span>Motor Controller</span>
+          <div class="hw-status">
+            <div class="hw-dot off" id="hwDot"></div>
+            <span id="hwText">OFFLINE</span>
+          </div>
+        </div>
+        <div class="hw-row">
+          <span>Sensor Bus</span>
+          <div class="hw-status">
+            <div class="hw-dot off" id="busDot"></div>
+            <span id="busText">NO DATA</span>
+          </div>
+        </div>
+        <div class="hw-row">
+          <span>Poll Rate</span>
+          <div class="hw-status" style="color: var(--accent); font-size:0.7rem;">
+            500 ms
+          </div>
+        </div>
+      </div>
+    </div>
 
-<!-- SETTINGS MODAL -->
-<div id="settingsModal" style="display:none;position:fixed;inset:0;background:#000a;align-items:center;justify-content:center;">
-  <div style="background:#141920;padding:20px">
-    <input id="apiInput" placeholder="http://localhost:8000"/>
-    <br><br>
-    <button onclick="saveSettings()">SAVE</button>
-    <button onclick="closeSettings()">CLOSE</button>
-  </div>
-</div>
+    <!-- CONTROLS -->
+    <div class="controls-row">
+      <button class="ctrl-btn run" id="btnCharge" onclick="sendCmd('charge')">
+        ▶ START MOTOR
+      </button>
+      <button class="ctrl-btn brake" id="btnDischarge" onclick="sendCmd('discharge')">
+        ⏸ APPLY BRAKE
+      </button>
+      <button class="ctrl-btn stop" id="btnStop" onclick="sendCmd('stop')">
+        ■ EMERGENCY STOP
+      </button>
+    </div>
+
+    <!-- CYCLE COUNT UPDATE -->
+    <div class="cycles-row">
+      <div class="cycles-panel">
+        <label>Operation Cycles</label>
+        <input type="number" id="cycleInput" placeholder="112" min="0" />
+        <button onclick="updateCycles()">UPDATE</button>
+      </div>
+      <div class="log-panel" id="logPanel">
+        <div class="log-entry"><span class="log-time">BOOT</span><span class="log-msg">Motor fault detection system initialized</span></div>
+      </div>
+    </div>
+
+    <!-- AI DIAGNOSTICS -->
+    <div class="ai-panel">
+      <div class="ai-header">
+        <div class="ai-title">
+          <span>◈</span> AI DIAGNOSTIC ANALYSIS
+        </div>
+        <button class="ai-fetch-btn" id="aiBtn" onclick="fetchAI()">
+          <span id="aiSpinnerWrap"></span>
+          ⚡ ANALYZE FAULTS
+        </button>
+      </div>
+      <div class="ai-output" id="aiOutput">
+        <span class="placeholder">// AI analysis will appear here. Click "ANALYZE FAULTS" to run diagnostics on current motor parameters.</span>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+</div><!-- /wrapper -->
 
 <script>
-let API = localStorage.getItem("API_URL") || "http://localhost:8000";
+  const API = 'http://localhost:8000';
+  let pollTimer = null;
 
-/* ---------- LOG ---------- */
-function addLog(msg){
-  const el = document.getElementById("logPanel");
-  const d = document.createElement("div");
-  d.textContent = new Date().toLocaleTimeString() + " → " + msg;
-  el.prepend(d);
-}
-
-/* ---------- CONNECTION ---------- */
-function setApiConn(ok){
-  document.getElementById("apiConn").textContent = "API: " + (ok?"✅":"❌");
-}
-function setHwConn(ok){
-  document.getElementById("hwConn").textContent = "HW: " + (ok?"✅":"❌");
-}
-
-/* ---------- STATE ---------- */
-function updateState(state, warning){
-  if(state==="discharging"){
-    document.getElementById("stateText").textContent="RUNNING";
-  } else {
-    document.getElementById("stateText").textContent="STOPPED";
+  // ── helpers ──────────────────────────────────────────
+  function ts() {
+    return new Date().toLocaleTimeString('en-GB', {hour12: false});
   }
 
-  if(warning && warning!=="Nominal"){
-    document.getElementById("warningBox").textContent="⚠ "+warning;
-  } else {
-    document.getElementById("warningBox").textContent="✓ ALL SYSTEMS NOMINAL";
+  function addLog(msg, type = '') {
+    const panel = document.getElementById('logPanel');
+    const div = document.createElement('div');
+    div.className = `log-entry ${type ? 'log-' + type : ''}`;
+    div.innerHTML = `<span class="log-time">${ts()}</span><span class="log-msg">${msg}</span>`;
+    panel.insertBefore(div, panel.firstChild);
+    if (panel.children.length > 40) panel.removeChild(panel.lastChild);
   }
-}
 
-/* ---------- POLL ---------- */
-async function poll(){
-  try{
-    const d = await fetch(API+"/data").then(r=>r.json());
-    const s = await fetch(API+"/state").then(r=>r.json());
-    const h = await fetch(API+"/hardware_connection").then(r=>r.json());
-
-    setApiConn(true);
-    setHwConn(h.hardware_connection);
-
-    document.getElementById("val-voltage").textContent=d.voltage.toFixed(2);
-    document.getElementById("val-current").textContent=d.current.toFixed(2);
-    document.getElementById("val-temp").textContent=d.temperature.toFixed(2);
-
-    updateState(s.state, s.warning_messages);
-
-  }catch{
-    setApiConn(false);
+  function setApiConn(ok) {
+    const el = document.getElementById('apiConn');
+    el.className = 'conn-badge ' + (ok ? 'connected' : 'disconnected');
+    el.querySelector('.dot').className = 'dot';
   }
-}
 
-/* ---------- COMMANDS ---------- */
-async function sendCmd(cmd){
-  try{
-    await fetch(API+"/"+cmd,{method:"POST"});
-    addLog(cmd.toUpperCase());
-    poll();
-  }catch{
-    addLog("FAILED "+cmd);
+  function setHwConn(ok) {
+    const el = document.getElementById('hwConn');
+    el.className = 'conn-badge ' + (ok ? 'connected' : 'disconnected');
+    el.querySelector('.dot').className = 'dot';
+    document.getElementById('hwDot').className = 'hw-dot ' + (ok ? 'on' : 'off');
+    document.getElementById('hwText').textContent = ok ? 'ONLINE' : 'OFFLINE';
+    document.getElementById('busDot').className = 'hw-dot ' + (ok ? 'on' : 'off');
+    document.getElementById('busText').textContent = ok ? 'ACTIVE' : 'NO DATA';
   }
-}
 
-/* ---------- AI ---------- */
-async function fetchAI(){
-  const out=document.getElementById("aiOutput");
-  out.textContent="Analyzing...";
-  try{
-    const r=await fetch(API+"/ai-suggestions",{method:"POST"});
-    const d=await r.json();
-    out.textContent=d.response || "Error";
-  }catch{
-    out.textContent="AI Failed";
-  }
-}
-
-/* ---------- SETTINGS ---------- */
-function openSettings(){
-  document.getElementById("settingsModal").style.display="flex";
-  document.getElementById("apiInput").value=API;
-}
-function closeSettings(){
-  document.getElementById("settingsModal").style.display="none";
-}
-function saveSettings(){
-  const val=document.getElementById("apiInput").value.trim();
-  if(!val) return alert("Enter URL");
-  API=val;
-  localStorage.setItem("API_URL",val);
-  addLog("API UPDATED → "+val);
-  closeSettings();
-}
-
-/* ---------- INIT ---------- */
-(async function(){
-  addLog("CONNECTING...");
-  try{
-    const r=await fetch(API+"/");
-    if((await r.json()).message==="connected"){
-      addLog("CONNECTED");
+  // ── sensor display ────────────────────────────────────
+  function updateSensor(id, val, min, max, unit) {
+    const el = document.getElementById('val-' + id);
+    const bar = document.getElementById('bar-' + id);
+    const card = document.getElementById('card-' + id);
+    el.textContent = isNaN(val) ? '—' : val.toFixed(2);
+    const pct = Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100));
+    bar.style.width = pct + '%';
+    // Color logic
+    const ratio = pct / 100;
+    card.className = 'sensor-card active';
+    if (ratio > 0.85 || ratio < 0.15) {
+      bar.style.background = 'var(--danger)';
+      card.className += ' danger-val';
+    } else if (ratio > 0.7 || ratio < 0.3) {
+      bar.style.background = 'var(--warn)';
+      card.className += ' warn-val';
+    } else {
+      bar.style.background = 'var(--accent)';
     }
-  }catch{
-    addLog("BACKEND DOWN");
   }
 
-  poll();
-  setInterval(poll,500);
-})();
+  // ── state display ─────────────────────────────────────
+  const STATE_MAP = {
+    idle: {
+      cls: 'idle', icon: '●', 
+      label: 'IDLE',
+      // "charging" → running a motor
+    },
+    charging: {
+      cls: 'running', icon: '▶',
+      label: 'RUNNING',
+    },
+    discharging: {
+      cls: 'braking', icon: '⏸',
+      label: 'BRAKING',
+    }
+  };
+
+  function updateState(state, warning) {
+    const map = STATE_MAP[state] || STATE_MAP.idle;
+    const badge = document.getElementById('stateBadge');
+    badge.className = 'state-badge ' + map.cls;
+    document.getElementById('stateIcon').textContent = map.icon;
+    document.getElementById('stateText').textContent = map.label;
+
+    const wbox = document.getElementById('warningBox');
+    const isAlarm = warning && warning !== 'Nominal';
+    if (isAlarm) {
+      wbox.className = 'warning-box alert';
+      wbox.textContent = '⚠ FAULT: ' + warning.toUpperCase();
+    } else {
+      wbox.className = 'warning-box';
+      wbox.textContent = '✓ ALL SYSTEMS NOMINAL';
+    }
+
+    const statePanel = document.getElementById('statePanel');
+    statePanel.className = 'panel state-panel';
+    if (isAlarm) statePanel.classList.add('danger-active');
+    else if (state === 'charging') statePanel.classList.add('ok-active');
+    else if (state === 'discharging') statePanel.classList.add('warn-active');
+  }
+
+  // ── metrics ───────────────────────────────────────────
+  function renderMetric(id, val, isHighGood) {
+    const el = document.getElementById('metric-' + id);
+    if (val === null || val === undefined || isNaN(val)) {
+      el.textContent = '—';
+      el.className = 'metric-val';
+      return;
+    }
+    el.textContent = typeof val === 'number' ? val.toFixed(1) : val;
+    el.className = 'metric-val';
+    if (isHighGood) {
+      if (val > 70) el.classList.add('ok');
+      else if (val > 40) el.classList.add('warn');
+      else el.classList.add('danger');
+    } else {
+      // for RUL — just show accent
+    }
+  }
+
+  // ── poll functions ────────────────────────────────────
+  async function pollData() {
+    try {
+      const [dataRes, stateRes, hwRes] = await Promise.all([
+        fetch(API + '/data'),
+        fetch(API + '/state'),
+        fetch(API + '/hardware_connection'),
+      ]);
+      const data = await dataRes.json();
+      const stateData = await stateRes.json();
+      const hw = await hwRes.json();
+
+      setApiConn(true);
+      setHwConn(hw.hardware_connection);
+
+      updateSensor('voltage', data.voltage, -10, 10, 'V');
+      updateSensor('current', data.current, -10, 10, 'A');
+      updateSensor('temp', data.temperature, -100, 100, '°C');
+      updateState(stateData.state, stateData.warning_messages);
+
+      // fetch metrics only if idle (validate_soc_soh_rul)
+      if (stateData.state === 'idle') {
+        const [socR, sohR, rulR] = await Promise.all([
+          fetch(API + '/s_o_c'),
+          fetch(API + '/s_o_h'),
+          fetch(API + '/r_u_l'),
+        ]);
+        const soc = await socR.json();
+        const soh = await sohR.json();
+        const rul = await rulR.json();
+        renderMetric('soc', soc.s_o_c, true);
+        renderMetric('soh', soh.s_o_h, true);
+        const rulVal = rul.r_u_l;
+        document.getElementById('metric-rul').textContent = typeof rulVal === 'number' ? rulVal : '—';
+        document.getElementById('metric-rul').className = 'metric-val' + (typeof rulVal === 'number' && rulVal < 100 ? ' danger' : rulVal < 300 ? ' warn' : ' ok');
+      } else {
+        // show error msg from endpoint
+        document.getElementById('metric-soc').textContent = 'ACTIVE';
+        document.getElementById('metric-soc').className = 'metric-val warn';
+        document.getElementById('metric-soh').textContent = 'ACTIVE';
+        document.getElementById('metric-soh').className = 'metric-val warn';
+        document.getElementById('metric-rul').textContent = 'ACTIVE';
+        document.getElementById('metric-rul').className = 'metric-val warn';
+      }
+
+    } catch(e) {
+      setApiConn(false);
+    }
+  }
+
+  // ── commands ──────────────────────────────────────────
+  async function sendCmd(cmd) {
+    const labels = { charge: 'START MOTOR', discharge: 'APPLY BRAKE', stop: 'EMERGENCY STOP' };
+    try {
+      const res = await fetch(API + '/' + cmd, { method: 'POST' });
+      const data = await res.json();
+      const type = cmd === 'stop' ? 'warn' : cmd === 'charge' ? 'ok' : 'warn';
+      addLog(labels[cmd] + ' → ' + (data.state || data.message).toUpperCase(), type);
+      await pollData();
+    } catch(e) {
+      addLog('CMD FAILED: ' + cmd.toUpperCase(), 'danger');
+      setApiConn(false);
+    }
+  }
+
+  async function updateCycles() {
+    const inp = document.getElementById('cycleInput');
+    const val = parseInt(inp.value);
+    if (isNaN(val) || val < 0) { addLog('INVALID CYCLE COUNT', 'warn'); return; }
+    try {
+      await fetch(API + '/cycles?count=' + val, { method: 'POST' });
+      addLog('OPERATION CYCLES UPDATED → ' + val, 'ok');
+      inp.value = '';
+      await pollData();
+    } catch(e) {
+      addLog('CYCLE UPDATE FAILED', 'danger');
+    }
+  }
+
+  // ── AI ────────────────────────────────────────────────
+  async function fetchAI() {
+    const btn = document.getElementById('aiBtn');
+    const out = document.getElementById('aiOutput');
+    const wrap = document.getElementById('aiSpinnerWrap');
+    btn.disabled = true;
+    wrap.innerHTML = '<span class="spinner"></span>';
+    out.innerHTML = '<span class="placeholder">// Running AI fault analysis…</span>';
+
+    try {
+      const res = await fetch(API + '/ai-suggestions', { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        out.textContent = data.response;
+        addLog('AI DIAGNOSTIC COMPLETE', 'ok');
+      } else {
+        out.innerHTML = `<span style="color:var(--danger)">// ERROR ${data.code}: ${data.detail}</span>`;
+        addLog('AI DIAGNOSTIC FAILED', 'danger');
+      }
+    } catch(e) {
+      out.innerHTML = '<span style="color:var(--danger)">// Connection failed. Is the backend running?</span>';
+      addLog('AI FETCH ERROR', 'danger');
+    } finally {
+      btn.disabled = false;
+      wrap.innerHTML = '';
+    }
+  }
+
+  // ── init ──────────────────────────────────────────────
+  (async function init() {
+    addLog('CONNECTING TO BACKEND…', '');
+    try {
+      const r = await fetch(API + '/');
+      const d = await r.json();
+      if (d.message === 'connected') {
+        setApiConn(true);
+        addLog('BACKEND CONNECTED', 'ok');
+      }
+    } catch(e) {
+      addLog('BACKEND UNREACHABLE — CHECK SERVER', 'danger');
+    }
+    await pollData();
+    setInterval(pollData, 500);
+  })();
 </script>
 </body>
 </html>
+
+

@@ -750,14 +750,11 @@
 
     <!-- CONTROLS -->
     <div class="controls-row">
-      <button class="ctrl-btn run" id="btnCharge" onclick="sendCmd('charge')">
+      <button class="ctrl-btn run" id="btnCharge" onclick="sendCmd('discharge')">
         ▶ START MOTOR
       </button>
-      <button class="ctrl-btn brake" id="btnDischarge" onclick="sendCmd('discharge')">
+      <button class="ctrl-btn brake" id="btnDischarge" onclick="sendCmd('stop')">
         ⏸ APPLY BRAKE
-      </button>
-      <button class="ctrl-btn stop" id="btnStop" onclick="sendCmd('stop')">
-        ■ EMERGENCY STOP
       </button>
     </div>
 
@@ -793,7 +790,7 @@
 </div><!-- /wrapper -->
 
 <script>
-  const API = 'http://localhost:8000';
+  const API = 'https://bms-production-017f.up.railway.app';
   let pollTimer = null;
 
   // ── helpers ──────────────────────────────────────────

@@ -117,7 +117,7 @@ async def ai_suggestions():
         "messages": [
             {
                 "role": "system",
-                "content": "You are a BMS safety model. Analyze V, C, T data for a 3.7V Li-ion system. Provide crisp safety advice."
+                "content": "You are a MOTOR safety model. Analyze V, C, T data for the system. Provide crisp safety advice."
             },
             {
                 "role": "user",

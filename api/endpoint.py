@@ -118,8 +118,7 @@ async def ai_suggestions():
         "messages": [
             {
                 "role": "system",
-                "content": "You are a MOTOR safety model. Analyze V, C, T, speed data for the system. Provide crisp safety advice.Predict Faults in the Motor system.
-                response should not exceed 40 lines"
+                "content": "You are a MOTOR safety model. Analyze V, C, T, speed data for the system. Provide crisp safety advice.Predict Faults in the Motor, response < 40 lines."
             },
             {
                 "role": "user",

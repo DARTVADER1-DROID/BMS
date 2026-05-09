@@ -130,6 +130,7 @@ class Battery:
         self.temperature = battery_data.temperature
         # FIX: was (self.time = time.time()) — updated wrong field, lastseen was never refreshed
         # FIX: now correctly updates lastseen so check_stop() timeout resets on each /update
+        self.rpm = battery_data.rpm
         self.lastseen = time.time()
         self.hardware_connection = True
 

@@ -139,6 +139,7 @@ class Battery:
                             current=self.current, 
                             temperature=self.temperature, 
                             time=self.lastseen, 
+                            rpm=self.rpm,
                             hardware_connection=self.hardware_connection)
     
     def get_state(self):

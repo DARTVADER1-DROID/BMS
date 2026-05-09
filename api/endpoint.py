@@ -50,7 +50,7 @@ async def data():
     return {
         "voltage": data.voltage,
         "current": data.current,
-        "temperature": data.temperature
+        "temperature": data.temperature,
         "speed": data.speed
     }
 

@@ -110,7 +110,7 @@ async def ai_suggestions():
 
     user_input = (
         f"DATA: Voltage: {b1.voltage}V, Current: {b1.current}A, Temperature: {b1.temperature}C, "
-        f"Hardware: {b1.hardware_connection}, State: {b1.get_state()}"
+        f"Hardware: {b1.hardware_connection}, State: {b1.get_state()}, rpm: {b1.rpm}"
     )
 
     payload = {
@@ -118,7 +118,7 @@ async def ai_suggestions():
         "messages": [
             {
                 "role": "system",
-                "content": "You are a MOTOR safety model. Analyze V, C, T data for the system. Provide crisp safety advice.Find Faults in the Motor system."
+                "content": "You are a MOTOR safety model. Analyze V, C, T, speed data for the system. Provide crisp safety advice.Predict Faults in the Motor system."
             },
             {
                 "role": "user",

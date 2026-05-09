@@ -51,7 +51,7 @@ async def data():
         "voltage": data.voltage,
         "current": data.current,
         "temperature": data.temperature,
-        "speed": data.speed
+        "speed": data.rpm
     }
 
 @app.get("/state")

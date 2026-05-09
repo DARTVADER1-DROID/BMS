@@ -9,7 +9,7 @@ class battery_data(BaseModel):
     voltage : float
     current : float
     temperature : float
-    speed : float
+    rpm : float
     time : float
     hardware_connection : bool 
 

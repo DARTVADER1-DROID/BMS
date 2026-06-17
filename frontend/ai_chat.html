@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>✿ AI Battery Companion ✿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Quicksand:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg-deep:#faf6f8;
+  --bg-light:#fdf9fc;
+  --bg-card:#ffffff;
+  --accent-1:#ff6b9d;
+  --accent-2:#c44569;
+  --accent-3:#f8b195;
+  --accent-4:#d4a5ff;
+  --accent-5:#ff85c0;
+  --text-dark:#2c1f35;
+  --text-light:#6b5568;
+  --text-muted:#a89aaa;
+  --success:#6ee7b7;
+  --warning:#fbbf24;
+  --error:#ff6b9d;
+  --border-soft:rgba(255,107,157,0.08);
+  --border-med:rgba(255,107,157,0.15);
+  --shadow-soft:0 2px 12px rgba(196,69,105,0.08);
+  --shadow-med:0 8px 32px rgba(196,69,105,0.12);
+  --shadow-glow:0 0 40px rgba(255,107,157,0.15);
+  --fn-display:'Poppins',sans-serif;
+  --fn-body:'Quicksand',sans-serif;
+}
+
+html{scroll-behavior:smooth}
+body{background:var(--bg-deep);color:var(--text-dark);font-family:var(--fn-body);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+/* ANIMATED BACKGROUND - CHERRY BLOSSOMS & BUBBLES */
+.bg-container{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sakura{position:absolute;width:20px;height:20px;opacity:0.6;animation:sakura-fall linear infinite;pointer-events:none}
+.sakura::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 30%, #ffb3d9, #ff85c0);border-radius:50%;opacity:0.8}
+.sakura::after{content:'';position:absolute;top:50%;left:50%;width:8px;height:8px;background:#fff;border-radius:50%;transform:translate(-50%,-50%);opacity:0.9}
+@keyframes sakura-fall{
+  0%{opacity:0.7;transform:translateY(-100vh) translateX(0) rotate(0deg) scale(1)}
+  50%{opacity:0.8}
+  100%{opacity:0;transform:translateY(100vh) translateX(100px) rotate(360deg) scale(0.8)}
+}
+
+.bubble{position:absolute;border:2px solid rgba(255,107,157,0.2);border-radius:50%;animation:bubble-float ease-in-out infinite;opacity:0.15}
+@keyframes bubble-float{
+  0%,100%{transform:translateY(0) translateX(0)}
+  25%{transform:translateY(-15px) translateX(8px)}
+  50%{transform:translateY(-30px) translateX(-5px)}
+  75%{transform:translateY(-15px) translateX(-12px)}
+}
+
+.gradient-mesh{position:absolute;width:800px;height:800px;border-radius:50%;opacity:0.08;pointer-events:none;filter:blur(80px)}
+.mesh-1{top:-200px;right:-150px;background:radial-gradient(circle,#ff6b9d,transparent)}
+.mesh-2{bottom:-100px;left:-200px;background:radial-gradient(circle,#d4a5ff,transparent)}
+.mesh-3{top:50%;right:10%;background:radial-gradient(circle,#f8b195,transparent)}
+
+/* MAIN LAYOUT */
+#app{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:24px 24px 48px}
+@media(max-width:768px){#app{padding:16px 16px 40px}}
+@media(max-width:480px){#app{padding:12px 12px 32px}}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;gap:20px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:16px}
+.brand-icon{width:70px;height:70px;border-radius:40px;background:linear-gradient(135deg,var(--accent-1),var(--accent-5));display:flex;align-items:center;justify-content:center;font-size:36px;box-shadow:var(--shadow-glow);animation:brand-pulse 3s ease-in-out infinite;position:relative}
+.brand-icon::after{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--accent-1);opacity:0.3;animation:ring-expand 2.5s ease-out infinite}
+@keyframes brand-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes ring-expand{0%{transform:scale(0.8);opacity:0.8}100%{transform:scale(1.3);opacity:0}}
+.brand-text{display:flex;flex-direction:column;gap:4px}
+.brand-name{font-family:var(--fn-display);font-size:24px;font-weight:800;background:linear-gradient(135deg,var(--accent-1),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand-sub{font-size:12px;color:var(--text-light);letter-spacing:0.05em}
+.header-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.control-btn{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,rgba(255,107,157,0.1),rgba(212,165,255,0.1));border:2px solid var(--border-med);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all 0.3s;color:var(--text-dark)}
+.control-btn:hover{transform:scale(1.1);background:linear-gradient(135deg,rgba(255,107,157,0.2),rgba(212,165,255,0.2));box-shadow:var(--shadow-glow)}
+.control-btn:active{transform:scale(0.95)}
+.status-pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:8px 14px;border-radius:30px;font-size:11px;font-weight:600;letter-spacing:0.05em;display:flex;align-items:center;gap:6px;backdrop-filter:blur(10px);border:1px solid var(--border-med)}
+.pill .dot{width:6px;height:6px;border-radius:50%;animation:pulse 2s ease-in-out infinite}
+.pill.ok{background:rgba(110,231,183,0.1);color:var(--success);border-color:rgba(110,231,183,0.3)}
+.pill.err{background:rgba(255,107,157,0.1);color:var(--error);border-color:rgba(255,107,157,0.3)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+
+/* MAIN GRID */
+.main-grid{display:grid;grid-template-columns:1fr 2fr;gap:24px;margin-bottom:24px}
+@media(max-width:1200px){.main-grid{grid-template-columns:1fr}}
+
+/* LEFT SIDEBAR - AI CHAT & KEY METRICS */
+.sidebar{display:flex;flex-direction:column;gap:20px}
+
+.card{background:var(--bg-card);border-radius:32px;border:1px solid var(--border-soft);box-shadow:var(--shadow-soft);padding:28px;transition:all 0.3s;animation:card-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) backwards}
+@keyframes card-pop{from{opacity:0;transform:scale(0.95) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.card:hover{transform:translateY(-4px);box-shadow:var(--shadow-med)}
+
+.card-title{font-family:var(--fn-display);font-size:14px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent-1);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title-icon{font-size:18px}
+
+/* AI CHAT CARD */
+.ai-card{background:linear-gradient(135deg,rgba(255,107,157,0.04),rgba(212,165,255,0.04));border:2px solid var(--border-med);position:relative;overflow:hidden;min-height:400px;display:flex;flex-direction:column}
+.ai-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,107,157,0.3),transparent)}
+.ai-content{flex:1;overflow-y:auto;padding-right:12px;display:flex;flex-direction:column;gap:12px}
+.ai-content::-webkit-scrollbar{width:4px}
+.ai-content::-webkit-scrollbar-thumb{background:rgba(255,107,157,0.2);border-radius:99px}
+.ai-message{background:rgba(255,107,157,0.08);border-left:3px solid var(--accent-1);padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;color:var(--text-dark);animation:message-slide 0.3s ease}
+@keyframes message-slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+.ai-loading{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)}
+.ai-loader{width:12px;height:12px;border-radius:50%;background:var(--accent-1);animation:loader-bounce 1.2s ease-in-out infinite}
+@keyframes loader-bounce{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1)}}
+.ai-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)}
+.ai-empty-icon{font-size:36px;animation:float-icon 3s ease-in-out infinite}
+@keyframes float-icon{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.ai-button{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent-1),var(--accent-5));border:none;color:#fff;font-family:var(--fn-body);font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;transition:all 0.3s;margin-top:12px;letter-spacing:0.05em}
+.ai-button:hover{transform:translateY(-2px);box-shadow:var(--shadow-glow)}
+.ai-button:active{transform:scale(0.98)}
+.ai-button.loading{opacity:0.7;cursor:not-allowed}
+
+/* KEY METRICS CARDS */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.metric-card{background:var(--bg-card);border-radius:28px;padding:18px;border:1px solid var(--border-soft);text-align:center;transition:all 0.3s;cursor:default}
+.metric-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-med)}
+.metric-label{font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:8px;text-transform:uppercase}
+.metric-value{font-family:var(--fn-display);font-size:32px;font-weight:800;background:linear-gradient(135deg,var(--accent-1),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
+.metric-unit{font-size:12px;color:var(--text-light);margin-top:4px}
+.metric-status{font-size:10px;color:var(--text-muted);margin-top:6px;font-style:italic}
+
+/* CENTER/RIGHT - CHARTS & CONTROLS */
+.main-content{display:flex;flex-direction:column;gap:20px}
+
+.charts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:1000px){.charts-grid{grid-template-columns:1fr}}
+
+.chart-card{background:var(--bg-card);border-radius:28px;padding:20px;border:1px solid var(--border-soft);box-shadow:var(--shadow-soft);animation:card-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) backwards;animation-delay:0.1s}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--border-soft)}
+.chart-label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-dark)}
+.chart-pip{width:8px;height:8px;border-radius:50%}
+.chart-live{font-size:14px;font-weight:800;font-family:var(--fn-display)}
+.chart-wrapper{height:140px;position:relative}
+@media(max-width:768px){.chart-wrapper{height:100px}}
+
+.bottom-section{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.bottom-section{grid-template-columns:1fr}}
+
+.control-card{background:var(--bg-card);border-radius:28px;padding:24px;border:1px solid var(--border-soft);box-shadow:var(--shadow-soft);animation:card-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) backwards;animation-delay:0.15s}
+
+/* ACTION BUTTONS */
+.action-buttons{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.action-btn{padding:16px;border-radius:24px;border:2px solid;font-family:var(--fn-display);font-size:13px;font-weight:700;letter-spacing:0.05em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.3s;text-transform:uppercase;min-height:60px}
+.action-btn:active{transform:scale(0.96)}
+.btn-discharge{border-color:var(--accent-1);color:var(--accent-1);background:rgba(255,107,157,0.1)}
+.btn-discharge:hover{background:rgba(255,107,157,0.2);transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,107,157,0.2)}
+.btn-stop{border-color:var(--error);color:var(--error);background:rgba(255,107,157,0.1)}
+.btn-stop:hover{background:rgba(255,107,157,0.2);transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,107,157,0.2)}
+.btn-icon{font-size:18px}
+
+/* SENSOR CARDS - SMALLER */
+.sensor-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+@media(max-width:900px){.sensor-grid{grid-template-columns:1fr}}
+
+.sensor-card{background:var(--bg-card);border-radius:24px;padding:16px;border:1px solid var(--border-soft);box-shadow:var(--shadow-soft);text-align:center;animation:card-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) backwards}
+.sensor-card:nth-child(1){animation-delay:0.2s}
+.sensor-card:nth-child(2){animation-delay:0.25s}
+.sensor-card:nth-child(3){animation-delay:0.3s}
+.sensor-icon{font-size:24px;margin-bottom:8px}
+.sensor-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px}
+.sensor-value{font-family:var(--fn-display);font-size:22px;font-weight:800;color:var(--text-dark);line-height:1;margin-bottom:4px}
+.sensor-unit{font-size:10px;color:var(--text-muted)}
+
+/* STATE & WARNINGS */
+.state-card{background:var(--bg-card);border-radius:28px;padding:20px;border:1px solid var(--border-soft);box-shadow:var(--shadow-soft);animation:card-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) backwards;animation-delay:0.35s}
+.state-label{font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px}
+.state-value{font-family:var(--fn-display);font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--accent-3),var(--accent-1));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px}
+.warning-list{display:flex;flex-direction:column;gap:8px;max-height:150px;overflow-y:auto}
+.warning-item{background:rgba(255,107,157,0.08);border-left:3px solid var(--error);padding:10px 12px;border-radius:10px;font-size:11px;color:var(--text-dark);animation:slide-in 0.3s ease}
+@keyframes slide-in{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.warning-empty{text-align:center;padding:20px;color:var(--text-muted);font-size:12px}
+.warning-empty-icon{font-size:28px;margin-bottom:8px}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(44,31,53,0.6);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg-card);border-radius:32px;border:1px solid var(--border-med);box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:500px;width:100%;max-height:80vh;overflow-y:auto;padding:28px;transform:scale(0.95) translateY(20px);transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1)}
+.modal-overlay.open .modal{transform:scale(1) translateY(0)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border-soft)}
+.modal-title{font-family:var(--fn-display);font-size:16px;font-weight:800;background:linear-gradient(135deg,var(--accent-1),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.modal-close{width:36px;height:36px;border-radius:50%;background:rgba(255,107,157,0.1);border:none;cursor:pointer;font-size:16px;color:var(--text-dark);transition:all 0.2s;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:rgba(255,107,157,0.2)}
+.form-group{margin-bottom:16px}
+.form-label{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;display:block}
+.form-input{width:100%;padding:10px 14px;border-radius:16px;border:1px solid var(--border-med);background:var(--bg-light);font-family:var(--fn-body);font-size:13px;color:var(--text-dark);outline:none;transition:all 0.2s}
+.form-input:focus{border-color:var(--accent-1);background:var(--bg-card);box-shadow:0 0 0 3px rgba(255,107,157,0.1)}
+.save-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent-1),var(--accent-5));border:none;border-radius:20px;color:#fff;font-family:var(--fn-display);font-size:12px;font-weight:700;letter-spacing:0.05em;cursor:pointer;transition:all 0.3s;margin-top:12px}
+.save-btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-glow)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;z-index:300;padding:14px 18px;border-radius:24px;font-size:12px;font-weight:600;background:var(--bg-card);border:1px solid var(--border-med);box-shadow:var(--shadow-med);transform:translateY(120px);opacity:0;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{border-color:rgba(110,231,183,0.3);color:var(--success)}
+.toast.warn{border-color:rgba(251,191,36,0.3);color:var(--warning)}
+.toast.fail{border-color:rgba(255,107,157,0.3);color:var(--error)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .brand-icon{width:56px;height:56px;font-size:28px}
+  .brand-name{font-size:18px}
+  .metric-value{font-size:28px}
+  .action-btn{padding:12px;font-size:12px;min-height:50px}
+  .sensor-grid{grid-template-columns:1fr 1fr}
+  .main-grid{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  #app{padding:12px 12px 32px}
+  header{flex-direction:column;align-items:flex-start}
+  .brand-icon{width:48px;height:48px;font-size:24px}
+  .brand-name{font-size:16px}
+  .card{padding:16px}
+  .control-card{padding:16px}
+  .metric-value{font-size:24px}
+  .sensor-value{font-size:18px}
+  .charts-grid{gap:12px}
+  .chart-wrapper{height:80px}
+  .action-btn{padding:10px;font-size:11px}
+  .sensor-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ANIMATED BACKGROUND -->
+<div class="bg-container">
+  <div class="gradient-mesh mesh-1"></div>
+  <div class="gradient-mesh mesh-2"></div>
+  <div class="gradient-mesh mesh-3"></div>
+  <div id="particles"></div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🔋</div>
+      <div class="brand-text">
+        <div class="brand-name">AI Battery Companion</div>
+        <div class="brand-sub">Smart Battery Management</div>
+      </div>
+    </div>
+    <div class="header-controls">
+      <div class="status-pills">
+        <div class="pill ok" id="pill-sv"><span class="dot"></span><span>Server OK</span></div>
+        <div class="pill ok" id="pill-hw"><span class="dot"></span><span>Hardware Linked</span></div>
+      </div>
+      <button class="control-btn" onclick="openSettings()" title="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <!-- LEFT SIDEBAR -->
+    <div class="sidebar">
+      <!-- AI CHAT CARD -->
+      <div class="card ai-card">
+        <div class="card-title"><span class="card-title-icon">✨</span>AI Insights</div>
+        <div class="ai-content" id="ai-content">
+          <div class="ai-empty">
+            <div class="ai-empty-icon">💬</div>
+            <div style="text-align:center;font-size:12px;">Click below to get AI-powered insights</div>
+          </div>
+        </div>
+        <button class="ai-button" onclick="getAISuggestions()" id="ai-btn">Get AI Suggestions ✨</button>
+      </div>
+
+      <!-- KEY METRICS -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">SOC</div>
+          <div class="metric-value" id="soc-value">—</div>
+          <div class="metric-unit">%</div>
+          <div class="metric-status" id="soc-status">State of Charge</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">SOH</div>
+          <div class="metric-value" id="soh-value">—</div>
+          <div class="metric-unit">%</div>
+          <div class="metric-status" id="soh-status">State of Health</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">RUL</div>
+          <div class="metric-value" id="rul-value">—</div>
+          <div class="metric-unit">cyc</div>
+          <div class="metric-status" id="rul-status">Remaining Life</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">State</div>
+          <div class="metric-value" id="state-value">—</div>
+          <div class="metric-unit">Battery State</div>
+          <div class="metric-status" id="state-status">Current Mode</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT MAIN CONTENT -->
+    <div class="main-content">
+      <!-- CHARTS -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-label"><span class="chart-pip" style="background:var(--accent-1)"></span>Voltage</div>
+            <div class="chart-live" style="color:var(--accent-1)" id="cv-v">— V</div>
+          </div>
+          <div class="chart-wrapper"><canvas id="ch-v"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-label"><span class="chart-pip" style="background:var(--accent-3)"></span>Current</div>
+            <div class="chart-live" style="color:var(--accent-3)" id="cv-c">— A</div>
+          </div>
+          <div class="chart-wrapper"><canvas id="ch-c"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-label"><span class="chart-pip" style="background:var(--accent-4)"></span>Temperature</div>
+            <div class="chart-live" style="color:var(--accent-4)" id="cv-t">— °C</div>
+          </div>
+          <div class="chart-wrapper"><canvas id="ch-t"></canvas></div>
+        </div>
+      </div>
+
+      <!-- BOTTOM SECTION -->
+      <div class="bottom-section">
+        <!-- CONTROLS -->
+        <div class="control-card">
+          <div class="card-title"><span class="card-title-icon">🎛️</span>Controls</div>
+          <div class="action-buttons">
+            <button class="action-btn btn-discharge" onclick="sendCmd('discharge')">
+              <span class="btn-icon">⬇️</span>Discharge
+            </button>
+            <button class="action-btn btn-stop" onclick="sendCmd('stop')">
+              <span class="btn-icon">⏹️</span>Stop
+            </button>
+          </div>
+        </div>
+
+        <!-- STATE & WARNINGS -->
+        <div class="state-card">
+          <div class="card-title"><span class="card-title-icon">⚠️</span>System Status</div>
+          <div class="warning-list" id="warning-list">
+            <div class="warning-empty"><div class="warning-empty-icon">🌸</div>All systems nominal!</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SENSORS SMALL CARDS -->
+      <div class="sensor-grid">
+        <div class="sensor-card">
+          <div class="sensor-icon">⚡</div>
+          <div class="sensor-label">Voltage</div>
+          <div class="sensor-value" id="v-n">—</div>
+          <div class="sensor-unit">V</div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-icon">〰️</div>
+          <div class="sensor-label">Current</div>
+          <div class="sensor-value" id="c-n">—</div>
+          <div class="sensor-unit">A</div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-icon">🌡️</div>
+          <div class="sensor-label">Temperature</div>
+          <div class="sensor-value" id="t-n">—</div>
+          <div class="sensor-unit">°C</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeSettings()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">✨ Configuration</span>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Base URL</label>
+      <input class="form-input" id="cfg-url" type="text" placeholder="https://api.example.com"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Polling Interval (ms)</label>
+      <input class="form-input" id="cfg-poll" type="number" min="200" step="100"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">History Length (points)</label>
+      <input class="form-input" id="cfg-hist" type="number" min="10" max="300" step="10"/>
+    </div>
+    <button class="save-btn" onclick="saveSettings()">Save Changes ✿</button>
+  </div>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* PARTICLE BACKGROUND ANIMATIONS */
+function createParticles(){
+  const container=document.getElementById('particles');
+  for(let i=0;i<40;i++){
+    const sakura=document.createElement('div');
+    sakura.className='sakura';
+    sakura.style.left=Math.random()*100+'%';
+    sakura.style.top=Math.random()*100+'%';
+    sakura.style['--d']=(5+Math.random()*12)+'s';
+    sakura.style['--dl']=(-Math.random()*15)+'s';
+    container.appendChild(sakura);
+  }
+  for(let i=0;i<15;i++){
+    const bubble=document.createElement('div');
+    bubble.className='bubble';
+    const size=20+Math.random()*60;
+    bubble.style.width=size+'px';
+    bubble.style.height=size+'px';
+    bubble.style.left=Math.random()*100+'%';
+    bubble.style.top=Math.random()*100+'%';
+    bubble.style['--duration']=(15+Math.random()*25)+'s';
+    bubble.style.animation='bubble-float '+bubble.style['--duration']+' ease-in-out infinite';
+    bubble.style['animation-delay']=(-Math.random()*20)+'s';
+    container.appendChild(bubble);
+  }
+}
+createParticles();
+
+/* CONFIG */
+const CFG={BASE_URL:"https://bms-production-2a2c.up.railway.app",POLL_MS:1000,HISTORY:60,ROUTES:{ping:{method:"GET",path:"/"},data:{method:"GET",path:"/data"},state:{method:"GET",path:"/state"},discharge:{method:"POST",path:"/discharge"},stop:{method:"POST",path:"/stop"},soc:{method:"GET",path:"/s_o_c"},soh:{method:"GET",path:"/s_o_h"},rul:{method:"GET",path:"/r_u_l"},hardware_connection:{method:"GET",path:"/hardware_connection"},ai_suggestions:{method:"POST",path:"/ai-suggestions"}}};
+
+async function api(key,{params={},body=null}={}){
+  const r=CFG.ROUTES[key];if(!r)throw new Error("Unknown: "+key);
+  let url=CFG.BASE_URL+r.path;
+  if(Object.keys(params).length)url+="?"+new URLSearchParams(params);
+  const opts={method:r.method,headers:{}};
+  if(body!=null){opts.headers["Content-Type"]="application/json";opts.body=JSON.stringify(body);}
+  const res=await fetch(url,opts);
+  if(!res.ok)throw new Error("HTTP "+res.status);
+  return res.json();
+}
+
+/* CHART SETUP */
+function mkGrad(ctx,hex){const g=ctx.createLinearGradient(0,0,0,140);g.addColorStop(0,hex+'60');g.addColorStop(0.5,hex+'30');g.addColorStop(1,hex+'00');return g;}
+function mkChart(id,hex,label,unit){
+  const ctx=document.getElementById(id).getContext('2d');
+  return new Chart(ctx,{
+    type:'line',data:{labels:Array(CFG.HISTORY).fill(''),datasets:[{label,data:Array(CFG.HISTORY).fill(null),borderColor:hex,backgroundColor:mkGrad(ctx,hex),borderWidth:2.5,pointRadius:0,tension:0.4,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(255,255,255,0.95)',borderColor:hex+'88',borderWidth:2,titleColor:'#2c1f35',bodyColor:hex,titleFont:{family:"'Poppins',sans-serif",size:10,weight:'600'},bodyFont:{family:"'Poppins',sans-serif",size:12,weight:'700'},padding:12,borderRadius:8,callbacks:{title:i=>'T−'+(CFG.HISTORY-i[0].dataIndex)+'s',label:i=>' '+(i.raw!=null?i.raw.toFixed(3):' — ')+' '+unit}}},scales:{x:{display:false},y:{display:true,grid:{color:'rgba(255,107,157,0.06)',drawBorder:false},ticks:{color:'#a89aaa',font:{family:"'Quicksand',sans-serif",size:9,weight:'600'},maxTicksLimit:4,callback:v=>v.toFixed(1)},border:{display:false}}}}
+  });
+}
+const CH={v:mkChart('ch-v','#ff6b9d','Voltage','V'),c:mkChart('ch-c','#f8b195','Current','A'),t:mkChart('ch-t','#d4a5ff','Temperature','°C')};
+
+/* UTILS */
+function push(key,val){const d=CH[key].data.datasets[0].data;d.push(val);if(d.length>CFG.HISTORY)d.shift();CH[key].update('none');}
+function setNum(id,val,dec){const el=document.getElementById(id);if(el)el.textContent=(val!=null&&!isNaN(Number(val)))?Number(val).toFixed(dec):'—';}
+function setTxt(id,txt){const el=document.getElementById(id);if(el)el.textContent=txt;}
+function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show '+(type||'warn');setTimeout(()=>{el.classList.remove('show')},3500);}
+
+/* SERVER & HARDWARE CHECKS */
+async function checkServer(){
+  const pill=document.getElementById('pill-sv');
+  try{await fetch(CFG.BASE_URL+CFG.ROUTES.ping.path);pill.className='pill ok';}
+  catch{pill.className='pill err';}
+}
+async function checkHardware(){
+  const pill=document.getElementById('pill-hw');
+  try{const r=await api('hardware_connection');const ok=r.hardware_connection===true||r.hardware_connection===1||r.hardware_connection==='true';pill.className='pill '+(ok?'ok':'err');}
+  catch{pill.className='pill err';}
+}
+
+/* DATA FETCHING */
+async function fetchData(){
+  try{const d=await api('data');
+    setNum('v-n',d.voltage,2);setNum('c-n',d.current,2);setNum('t-n',d.temperature,1);
+    setTxt('cv-v',d.voltage!=null?d.voltage.toFixed(2)+' V':'—');
+    setTxt('cv-c',d.current!=null?d.current.toFixed(2)+' A':'—');
+    setTxt('cv-t',d.temperature!=null?d.temperature.toFixed(1)+' °C':'—');
+    push('v',d.voltage);push('c',d.current);push('t',d.temperature);
+  }catch(e){}
+}
+async function fetchState(){
+  try{const s=await api('state');setTxt('state-value',(s.state||'Idle').charAt(0).toUpperCase()+(s.state||'Idle').slice(1).toLowerCase());updateWarnings(s.warning_messages);}
+  catch(e){}
+}
+async function fetchSOC(){
+  try{const r=await api('soc');
+    if(typeof r.s_o_c==='number'){setNum('soc-value',r.s_o_c,1);setTxt('soc-status',r.s_o_c>80?'High ✨':r.s_o_c>30?'Good':'Low');}
+    else{setNum('soc-value',null,0);setTxt('soc-status','Unavailable');}
+  }catch(e){}
+}
+async function fetchSOH(){
+  try{const r=await api('soh');
+    if(typeof r.s_o_h==='number'){setNum('soh-value',r.s_o_h,1);setTxt('soh-status',r.s_o_h>80?'Healthy ✨':r.s_o_h>50?'Degraded':'Critical');}
+    else{setNum('soh-value',null,0);setTxt('soh-status','Unavailable');}
+  }catch(e){}
+}
+async function fetchRUL(){
+  try{const r=await api('rul');
+    if(typeof r.r_u_l==='number'){setNum('rul-value',r.r_u_l,0);setTxt('rul-status','Remaining cycles');}
+    else{setNum('rul-value',null,0);setTxt('rul-status','Unavailable');}
+  }catch(e){}
+}
+async function pollAll(){await checkServer();await checkHardware();await fetchData();await fetchState();await fetchSOC();await fetchSOH();await fetchRUL();}
+
+/* POLLING */
+let pollTimer=null;
+function startPolling(){if(pollTimer)clearInterval(pollTimer);pollAll();pollTimer=setInterval(pollAll,CFG.POLL_MS);}
+
+/* AI SUGGESTIONS */
+async function getAISuggestions(){
+  const btn=document.getElementById('ai-btn');
+  const content=document.getElementById('ai-content');
+  btn.classList.add('loading');
+  btn.textContent='⏳ Thinking...';
+  
+  try{
+    const response=await api('ai_suggestions');
+    if(response.status==='success'){
+      content.innerHTML='<div class="ai-message">'+response.response.replace(/\n/g,'<br/>')+'</div>';
+      showToast('AI insight ready! ✨','ok');
+    }else{
+      content.innerHTML='<div class="ai-message">⚠️ Unable to process. Please try again.</div>';
+    }
+  }catch(e){
+    content.innerHTML='<div class="ai-message">❌ Error: '+e.message+'</div>';
+    showToast('Failed to get AI suggestions','fail');
+  }
+  
+  btn.classList.remove('loading');
+  btn.textContent='Get AI Suggestions ✨';
+}
+
+/* WARNINGS */
+function updateWarnings(messages){
+  const list=document.getElementById('warning-list');
+  let items=[];
+  if(!messages)items=[];
+  else if(Array.isArray(messages))items=messages.filter(Boolean);
+  else if(typeof messages==='object')items=Object.values(messages).filter(Boolean);
+  else if(typeof messages==='string'&&messages.trim())items=[messages];
+  
+  if(!items.length||(items.length===1&&items[0]==='Nominal')){
+    list.innerHTML='<div class="warning-empty"><div class="warning-empty-icon">🌸</div>All systems nominal!</div>';return;
+  }
+  list.innerHTML=items.map(m=>'<div class="warning-item">⚠️ '+m+'</div>').join('');
+}
+
+/* COMMANDS */
+async function sendCmd(key){
+  try{const res=await api(key);showToast((res.message||key)+' ✨','ok');await pollAll();}
+  catch(e){showToast('Error: '+e.message,'fail');}
+}
+
+/* SETTINGS MODAL */
+function openSettings(){
+  document.getElementById('cfg-url').value=CFG.BASE_URL;
+  document.getElementById('cfg-poll').value=CFG.POLL_MS;
+  document.getElementById('cfg-hist').value=CFG.HISTORY;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeSettings(){document.getElementById('modal-overlay').classList.remove('open');}
+function saveSettings(){
+  CFG.BASE_URL=document.getElementById('cfg-url').value.trim().replace(/\/$/,'');
+  CFG.POLL_MS=parseInt(document.getElementById('cfg-poll').value,10)||1000;
+  CFG.HISTORY=parseInt(document.getElementById('cfg-hist').value,10)||60;
+  Object.values(CH).forEach(ch=>{const d=ch.data.datasets[0].data;while(d.length>CFG.HISTORY)d.shift();while(d.length<CFG.HISTORY)d.unshift(null);});
+  closeSettings();
+  startPolling();
+  showToast('Configuration saved ✨','ok');
+}
+
+/* INIT */
+startPolling();
+</script>
+
+</body>
+</html>f

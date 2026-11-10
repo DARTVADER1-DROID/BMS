@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-static double env_double(const char*n,double d){const char*v=getenv(n);if(!v||!*v)return d;char*e=NULL;double x=strtod(v,&e);return e&&*e=='\\0'&&isfinite(x)?x:d;}
+static double env_double(const char*n,double d){const char*v=getenv(n);if(!v||!*v)return d;char*e=NULL;double x=strtod(v,&e);return e&&*e=='\0'&&isfinite(x)?x:d;}
 static bool env_true(const char*n){const char*v=getenv(n);return v&&(!strcmp(v,"1")||!strcmp(v,"true")||!strcmp(v,"TRUE")||!strcmp(v,"yes"));}
 static double mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return(double)t.tv_sec+(double)t.tv_nsec/1e9;}
 static bool limits_valid(const Bms*b){return b->voltage_min<b->voltage_max&&b->current_min<b->current_max&&b->temperature_min<b->temperature_max;}
@@ -39,7 +39,7 @@ BmsResult bms_update_telemetry(Bms*b,double v,double a,double t,double now){
 }
 static BmsResult start_state(Bms*b,BmsState target){
  pthread_mutex_lock(&b->lock);
- if(!b->control_enabled){pthread_mutex_unlock(&b->lock);return BMS_ERR_DISABLED;}
+ if(!b->control_enabled){pthread_mutex_unlock(&b->lock);return BMS_ERR_DISABLED;}\n if(!b->hardware_connected){pthread_mutex_unlock(&b->lock);return BMS_ERR_UNSAFE;}
  if(!safe_unlocked(b)){b->state=BMS_IDLE;pthread_mutex_unlock(&b->lock);return BMS_ERR_UNSAFE;}
  if(b->state!=BMS_IDLE){pthread_mutex_unlock(&b->lock);return BMS_ERR_TRANSITION;}
  b->state=target;pthread_mutex_unlock(&b->lock);return BMS_OK;

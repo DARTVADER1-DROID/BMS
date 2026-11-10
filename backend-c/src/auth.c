@@ -20,8 +20,8 @@
 
 #define AUTH_PASSWORD_ITERATIONS 600000
 #define AUTH_SESSION_SECONDS (8 * 60 * 60)
-#define AUTH_COOKIE_NAME "bms_session"
-#define AUTH_CSRF_COOKIE_NAME "bms_csrf"
+#define AUTH_COOKIE_NAME "__Host-bms_session"
+#define AUTH_CSRF_COOKIE_NAME "__Host-bms_csrf"
 #define AUTH_TOKEN_BYTES 32
 #define AUTH_HEX_SIZE (AUTH_TOKEN_BYTES * 2 + 1)
 
@@ -215,9 +215,15 @@ bool auth_init(const char *username, const char *password, const char *secret)
 {
     if (username == NULL || password == NULL || secret == NULL
         || username[0] == '\0' || password[0] == '\0'
-        || strlen(username) > 128 || strlen(password) < 12
+        || strlen(username) > 128 || strlen(password) < 12 || strlen(password) > 1024
         || strlen(secret) < 32 || strlen(secret) > sizeof(session_secret)) {
         return false;
+    }
+
+    for (const unsigned char *p = (const unsigned char *)username; *p != 0; p++) {
+        if (!isalnum(*p) && *p != '_' && *p != '-' && *p != '.') {
+            return false;
+        }
     }
 
     if (RAND_bytes(password_salt, (int)sizeof(password_salt)) != 1) {

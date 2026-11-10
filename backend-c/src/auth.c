@@ -106,37 +106,27 @@ static bool read_cookie(
     size_t output_size
 )
 {
-    const char *cookie_header;
-    size_t name_length;
+    const char *cookie_value;
+    size_t value_length;
 
-    cookie_header = MHD_lookup_connection_value(
+    cookie_value = MHD_lookup_connection_value(
         connection,
         MHD_COOKIE_KIND,
         cookie_name
     );
 
-    if (cookie_header == NULL || output_size == 0) {
+    if (cookie_value == NULL || output_size == 0) {
         return false;
     }
 
-    name_length = strlen(cookie_name);
+    value_length = strlen(cookie_value);
 
-    if (strncmp(cookie_header, cookie_name, name_length) != 0
-        || cookie_header[name_length] != '=') {
+    if (value_length == 0 || value_length >= output_size
+        || strpbrk(cookie_value, ";,") != NULL) {
         return false;
     }
 
-    cookie_header += name_length + 1;
-
-    size_t value_length = strcspn(cookie_header, ";");
-
-    if (value_length == 0 || value_length >= output_size) {
-        return false;
-    }
-
-    memcpy(output, cookie_header, value_length);
-    output[value_length] = '\0';
-
+    memcpy(output, cookie_value, value_length + 1);
     return true;
 }
 

@@ -3,7 +3,13 @@
 
 #include "battery_types.h"
 
-/* Convert a completed, validated pulse test into diagnostic features. */
-bool battery_features_calculate(const BatteryTest *test, BatteryFeatures *features);
+/*
+ * Convert a completed pulse test into diagnostic features.
+ * The input test must contain validated measurement data.
+ */
+bool battery_features_calculate(
+    const BatteryTest *test,
+    BatteryFeatures *features
+);
 
 #endif

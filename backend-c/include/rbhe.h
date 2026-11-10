@@ -61,7 +61,7 @@ typedef struct {
     double steady_resistance_ohm;
     double voltage_slope_v_per_s;
     double recovery_fraction;
-    double recovery_time_constant_s;
+    double recovery_elapsed_s;
     double temperature_rise_c;
     double temperature_slope_c_per_s;
     double estimated_soh_percent;

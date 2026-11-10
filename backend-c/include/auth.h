@@ -8,6 +8,9 @@ struct MHD_Connection;
 
 bool auth_init(const char *username, const char *password, const char *secret);
 bool auth_verify_credentials(const char *username, const char *password);
+bool auth_login_allowed(struct MHD_Connection *connection);
+void auth_login_failed(struct MHD_Connection *connection);
+void auth_login_succeeded(struct MHD_Connection *connection);
 bool auth_validate_request(struct MHD_Connection *connection);
 bool auth_validate_csrf(struct MHD_Connection *connection);
 bool auth_create_session(

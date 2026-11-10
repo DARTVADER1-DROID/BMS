@@ -8,7 +8,10 @@
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 
+#include <arpa/inet.h>
 #include <ctype.h>
+#include <pthread.h>
+#include <sys/socket.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +31,67 @@ static unsigned char password_digest[EVP_MAX_MD_SIZE];
 static unsigned char session_secret[64];
 static size_t session_secret_length;
 static bool auth_ready;
+
+#define AUTH_RATE_BUCKETS 64
+#define AUTH_RATE_WINDOW_SECONDS 900
+#define AUTH_RATE_MAX_FAILURES 5
+
+typedef struct {
+    char address[INET6_ADDRSTRLEN];
+    time_t window_started;
+    unsigned int failures;
+} LoginRateBucket;
+
+static LoginRateBucket login_buckets[AUTH_RATE_BUCKETS];
+static pthread_mutex_t login_rate_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static bool client_address(
+    struct MHD_Connection *connection,
+    char output[INET6_ADDRSTRLEN]
+)
+{
+    const union MHD_ConnectionInfo *info = MHD_get_connection_info(
+        connection,
+        MHD_CONNECTION_INFO_CLIENT_ADDRESS
+    );
+    const struct sockaddr *address;
+
+    if (info == NULL || info->client_addr == NULL) {
+        return false;
+    }
+
+    address = info->client_addr;
+
+    if (address->sa_family == AF_INET) {
+        const struct sockaddr_in *ipv4 = (const struct sockaddr_in *)address;
+        return inet_ntop(AF_INET, &ipv4->sin_addr, output, INET6_ADDRSTRLEN) != NULL;
+    }
+
+    if (address->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *ipv6 = (const struct sockaddr_in6 *)address;
+        return inet_ntop(AF_INET6, &ipv6->sin6_addr, output, INET6_ADDRSTRLEN) != NULL;
+    }
+
+    return false;
+}
+
+static LoginRateBucket *rate_bucket_for(const char *address)
+{
+    size_t slot = 0;
+
+    for (const unsigned char *p = (const unsigned char *)address; *p != 0; p++) {
+        slot = (slot * 33U + (size_t)*p) % AUTH_RATE_BUCKETS;
+    }
+
+    if (strcmp(login_buckets[slot].address, address) != 0) {
+        (void)snprintf(login_buckets[slot].address,
+                       sizeof(login_buckets[slot].address), "%s", address);
+        login_buckets[slot].window_started = time(NULL);
+        login_buckets[slot].failures = 0;
+    }
+
+    return &login_buckets[slot];
+}
 
 static bool constant_time_equal(
     const unsigned char *left,
@@ -360,6 +424,65 @@ bool auth_verify_credentials(const char *username, const char *password)
     return result != 0;
 }
 
+bool auth_login_allowed(struct MHD_Connection *connection)
+{
+    char address[INET6_ADDRSTRLEN];
+    bool allowed;
+    time_t now = time(NULL);
+
+    if (!client_address(connection, address)) {
+        return false;
+    }
+
+    pthread_mutex_lock(&login_rate_lock);
+    LoginRateBucket *bucket = rate_bucket_for(address);
+    if (now - bucket->window_started >= AUTH_RATE_WINDOW_SECONDS
+        || now < bucket->window_started) {
+        bucket->window_started = now;
+        bucket->failures = 0;
+    }
+    allowed = bucket->failures < AUTH_RATE_MAX_FAILURES;
+    pthread_mutex_unlock(&login_rate_lock);
+    return allowed;
+}
+
+void auth_login_failed(struct MHD_Connection *connection)
+{
+    char address[INET6_ADDRSTRLEN];
+
+    if (!client_address(connection, address)) {
+        return;
+    }
+
+    pthread_mutex_lock(&login_rate_lock);
+    LoginRateBucket *bucket = rate_bucket_for(address);
+    time_t now = time(NULL);
+    if (now - bucket->window_started >= AUTH_RATE_WINDOW_SECONDS
+        || now < bucket->window_started) {
+        bucket->window_started = now;
+        bucket->failures = 0;
+    }
+    if (bucket->failures < AUTH_RATE_MAX_FAILURES) {
+        bucket->failures++;
+    }
+    pthread_mutex_unlock(&login_rate_lock);
+}
+
+void auth_login_succeeded(struct MHD_Connection *connection)
+{
+    char address[INET6_ADDRSTRLEN];
+
+    if (!client_address(connection, address)) {
+        return;
+    }
+
+    pthread_mutex_lock(&login_rate_lock);
+    LoginRateBucket *bucket = rate_bucket_for(address);
+    bucket->failures = 0;
+    bucket->window_started = time(NULL);
+    pthread_mutex_unlock(&login_rate_lock);
+}
+
 bool auth_validate_request(struct MHD_Connection *connection)
 {
     char username[129];
@@ -400,6 +523,7 @@ void auth_clear_secrets(void)
     OPENSSL_cleanse(password_salt, sizeof(password_salt));
     OPENSSL_cleanse(password_digest, sizeof(password_digest));
     OPENSSL_cleanse(session_secret, sizeof(session_secret));
+    OPENSSL_cleanse(login_buckets, sizeof(login_buckets));
     session_secret_length = 0;
     auth_ready = false;
 }

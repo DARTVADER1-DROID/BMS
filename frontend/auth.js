@@ -6,7 +6,7 @@
   let csrfValue = localStorage.getItem("bms_csrf_token") || "";
 
   function apiUrl(path) {
-    return API_BASE + path.replace(/^\\/api/, "");
+    return API_BASE + path.slice(API_PREFIX.length);
   }
   const originalFetch = window.fetch.bind(window);
   let overlay;

@@ -1,6 +1,6 @@
 # BMS C backend
 
-Native C replacement for the original FastAPI service. The Python implementation and frontend remain available for comparison and rollback during validation.
+Native C implementation of the BMS backend. The frontend remains available and communicates with this API.
 
 ## Build
 
@@ -60,7 +60,7 @@ The legacy empirical SOH curve is retained for API compatibility but is not vali
 
 ## Deployment
 
-The root Dockerfile builds the native service and runs core tests in the build stage. Configure PORT, safety limits, and tokens as deployment environment variables. Keep the Python backend available until API compatibility and hardware-in-the-loop acceptance tests pass.
+The root Dockerfile builds the native service and runs core tests in the build stage. Configure PORT, safety limits, and tokens as deployment environment variables. The legacy Python API has been removed; deploy and maintain the native C service.
 
 ## Rapid battery diagnostic modules
 

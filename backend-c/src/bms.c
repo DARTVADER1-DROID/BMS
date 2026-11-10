@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 static double env_double(const char*n,double d){const char*v=getenv(n);if(!v||!*v)return d;char*e=NULL;double x=strtod(v,&e);return e&&*e=='\0'&&isfinite(x)?x:d;}
-static bool env_true(const char*n){const char*v=getenv(n);return v&&(!strcmp(v,"1")||!strcmp(v,"true")||!strcmp(v,"TRUE")||!strcmp(v,"yes"));}
+static bool env_set(const char*n){const char*v=getenv(n);return v&&*v;}\nstatic bool env_true(const char*n){const char*v=getenv(n);return v&&(!strcmp(v,"1")||!strcmp(v,"true")||!strcmp(v,"TRUE")||!strcmp(v,"yes"));}
 static double mono(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return(double)t.tv_sec+(double)t.tv_nsec/1e9;}
 static bool limits_valid(const Bms*b){return b->voltage_min<b->voltage_max&&b->current_min<b->current_max&&b->temperature_min<b->temperature_max;}
 static bool safe_unlocked(Bms*b){
@@ -28,7 +28,7 @@ void bms_init(Bms*b){
  b->soc_voltage_min=env_double("BMS_SOC_VOLTAGE_MIN",0);b->soc_voltage_max=env_double("BMS_SOC_VOLTAGE_MAX",5);
  b->rated_useful_life=env_double("BMS_RATED_USEFUL_LIFE",1000);b->cycle_count=112;
  b->last_seen=mono();b->state=BMS_IDLE;
- b->control_enabled=env_true("BMS_ENABLE_CONTROL")&&limits_valid(b);
+ b->control_enabled=env_true("BMS_ENABLE_CONTROL")&&env_set("BMS_VOLTAGE_MIN")&&env_set("BMS_VOLTAGE_MAX")&&env_set("BMS_CURRENT_MIN")&&env_set("BMS_CURRENT_MAX")&&env_set("BMS_TEMPERATURE_MIN")&&env_set("BMS_TEMPERATURE_MAX")&&limits_valid(b);
  snprintf(b->warning,sizeof b->warning,"Nominal");
 }
 void bms_destroy(Bms*b){pthread_mutex_destroy(&b->lock);}

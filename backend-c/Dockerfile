@@ -9,6 +9,7 @@ RUN apt-get update \
         pkg-config \
         libmicrohttpd-dev \
         libcjson-dev \
+        libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -25,6 +26,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libmicrohttpd12 \
         libcjson1 \
+        libssl3 \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system bms \

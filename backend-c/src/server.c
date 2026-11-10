@@ -718,7 +718,7 @@ static enum MHD_Result handle_auth_request(
         char csrf_value[65];
         char session_header[420];
         char csrf_header[180];
-        char response_body[256];
+        char response_body[512];
         enum MHD_Result result;
 
         if (!auth_login_allowed(connection)) {
@@ -748,7 +748,7 @@ static enum MHD_Result handle_auth_request(
         }
 
         (void)snprintf(session_header, sizeof(session_header),
-            "__Host-bms_session=%s; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax",
+            "__Host-bms_session=%s; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None",
             session_value);
         (void)snprintf(csrf_header, sizeof(csrf_header),
             "__Host-bms_csrf=%s; Path=/; Max-Age=28800; Secure; SameSite=Lax", csrf_value);

@@ -94,11 +94,18 @@ RbheResult rbhe_sample(Rbhe *e, const RbheSample *s) {
         e->sum_load_current_a += discharge;
         e->sum_load_voltage_v += s->voltage_v;
         ++e->load_count;
-    } else if (e->saw_load && !e->saw_recovery) {
-        e->saw_recovery = true;
-        e->recovery_start_time_s = s->timestamp_s;
+    } else if (fabs(discharge) < e->limits.min_test_current_a && e->saw_load) {
+        /* Keep the latest unloaded voltage so the feature reflects recovery,
+           not merely the first sample after the load was removed. */
+        if (!e->saw_recovery) {
+            e->saw_recovery = true;
+            e->recovery_start_time_s = s->timestamp_s;
+        }
         e->recovery_voltage_v = s->voltage_v;
         e->recovery_time_s = s->timestamp_s - e->load_start_time_s;
+    } else if (e->saw_load) {
+        /* A charging current or an ambiguous transition invalidates this pulse. */
+        return RBHE_ERR_INSUFFICIENT_DATA;
     }
     return RBHE_OK;
 }

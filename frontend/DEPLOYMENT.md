@@ -1,44 +1,33 @@
-# Frontend deployment (Vercel)
+# BMS frontend deployment on Render
 
-This is a static HTML frontend. The repository now supports either Vercel project root:
+The frontend is a static HTML application hosted as a Render Static Site.
 
-## Recommended: project root is `frontend`
+- **Render service:** `bms-dashboard`
+- **Repository:** `DARTVADER1-DROID/BMS`
+- **Branch:** `rewrite/c-backend`
+- **Publish directory:** `frontend`
+- **Build command:** `echo 'Publishing static BMS dashboards'`
+- **Public URL:** `https://bms-dashboard-xvti.onrender.com`
 
-- **Git repository:** `DARTVADER1-DROID/BMS`
-- **Root Directory:** `frontend`
-- **Framework Preset:** Other
-- **Build Command:** leave empty / disabled
-- **Output Directory:** `.`
-- **Install Command:** leave empty
-- **Production branch:** `rewrite/c-backend` while testing this backend/frontend integration
+## Dashboards
 
-Vercel reads `frontend/vercel.json`. The dashboard HTML files and `auth.js` are at the project root.
+- `/` redirects to VoltTrack.
+- `/volttrack/` — VoltTrack.
+- `/rul/` — Remaining useful life.
+- `/cycles/` — Cycle analysis.
 
-## Alternative: project root is the repository root
+## API and authentication
 
-If the Vercel project is configured with the repository root as its Root Directory, Vercel reads the top-level `vercel.json`. That configuration maps the same dashboard paths to files under `/frontend`, including an explicit `/auth.js` rewrite.
+The browser calls the C API at `https://bms-c-api.onrender.com`. The backend must have `BMS_CORS_ORIGIN=https://bms-dashboard-xvti.onrender.com`.
 
-Both configurations use filesystem-aware rewrites, so static files are served normally and the API proxy is applied only to `/api/*`.
+The API uses credentialed CORS and Secure, HttpOnly session cookies with `SameSite=None`. The login response returns a CSRF token which the frontend retains for authenticated state-changing requests. Never use a wildcard CORS origin with credentialed requests.
 
-## Routes and authentication
+## Verify after deploy
 
-Both configurations map:
+1. Open the public site and confirm the dashboard renders.
+2. Confirm `/auth.js` loads.
+3. Confirm the browser displays the sign-in form when logged out.
+4. Sign in and verify telemetry requests succeed.
+5. Sign out and confirm the next protected request requires login.
 
-- `/` and `/volttrack` to the VoltTrack dashboard
-- `/rul` to the RUL dashboard
-- `/cycles` to the cycle counter
-- `/api/*` to `https://bms-c-api.onrender.com/*`
-
-The dashboards load `/auth.js` from the same origin and call the backend through `/api`. Do not configure a separate frontend API origin: the proxy keeps session cookies first-party and avoids cross-origin cookie restrictions.
-
-## Deployment verification
-
-After Vercel reports the deployment as Ready, check:
-
-1. `/` — renders VoltTrack, not a Vercel placeholder.
-2. `/volttrack`, `/rul`, and `/cycles` — each renders its dashboard.
-3. `/auth.js` — returns JavaScript, not an HTML 404 page.
-4. `/api/health` — returns backend health JSON.
-5. `/api/auth/me` — returns HTTP 401 before login and HTTP 200 after login.
-
-The browser should show the sign-in overlay when logged out. After a successful login, the session cookie should be sent automatically to same-origin `/api/*` requests.
+Vercel deployment configuration has been removed from this repository.

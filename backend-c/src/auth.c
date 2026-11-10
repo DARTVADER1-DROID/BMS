@@ -19,6 +19,7 @@
 #include <time.h>
 
 #define AUTH_PASSWORD_ITERATIONS 600000
+#define AUTH_PASSWORD_HASH_BYTES 32
 #define AUTH_SESSION_SECONDS (8 * 60 * 60)
 #define AUTH_COOKIE_NAME "__Host-bms_session"
 #define AUTH_CSRF_COOKIE_NAME "__Host-bms_csrf"
@@ -27,7 +28,7 @@
 
 static char configured_username[129];
 static unsigned char password_salt[16];
-static unsigned char password_digest[EVP_MAX_MD_SIZE];
+static unsigned char password_digest[AUTH_PASSWORD_HASH_BYTES];
 static unsigned char session_secret[64];
 static size_t session_secret_length;
 static bool auth_ready;
@@ -400,7 +401,7 @@ bool auth_read_session(
 
 bool auth_verify_credentials(const char *username, const char *password)
 {
-    unsigned char candidate[EVP_MAX_MD_SIZE];
+    unsigned char candidate[AUTH_PASSWORD_HASH_BYTES];
     int result;
 
     if (!auth_ready || username == NULL || password == NULL

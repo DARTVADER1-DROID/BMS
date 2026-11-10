@@ -1,6 +1,7 @@
 #include "auth.h"
 
-#include <stdio.h>\n#include <string.h>
+#include <stdio.h>
+#include <string.h>
 
 int main(void)
 {
@@ -22,9 +23,9 @@ int main(void)
             csrf_cookie,
             sizeof(csrf_cookie)
         )
-        || session_cookie[0] == '\\0'
+        || session_cookie[0] == '\0'
         || strlen(csrf_cookie) != 64) {
-        fputs("session token creation failed\\n", stderr);
+        fputs("session token creation failed\n", stderr);
         auth_clear_secrets();
         return 1;
     }

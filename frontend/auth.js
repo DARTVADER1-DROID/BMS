@@ -8,7 +8,7 @@
   let loginInProgress = false;
 
   function csrfToken() {
-    const match = document.cookie.match(/(?:^|; )bms_csrf=([^;]+)/);
+    const match = document.cookie.match(/(?:^|; )__Host-bms_csrf=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : "";
   }
 

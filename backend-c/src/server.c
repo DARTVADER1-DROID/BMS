@@ -502,21 +502,19 @@ static enum MHD_Result handle_control_error(
     cJSON *json;
     enum MHD_Result response_result;
 
+    status_code =
+        result == BMS_ERR_DISABLED
+            ? 503
+            : (result == BMS_ERR_INVALID ? 400 : 409);
+
     if (result == BMS_ERR_DISABLED) {
-        status_code = 503;
         error_message = "control_not_commissioned";
-    } else if (result == BMS_ERR_INVALID) {
-        status_code = 400;
-        error_message = "invalid_request";
     } else if (result == BMS_ERR_UNSAFE) {
-        status_code = 409;
         error_message = "safety_interlock";
     } else if (result == BMS_ERR_TRANSITION) {
-        status_code = 409;
         error_message = "invalid_state_transition";
     } else {
-        status_code = 500;
-        error_message = "internal_error";
+        error_message = "invalid_request";
     }
 
     json = create_json_object();

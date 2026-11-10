@@ -12,6 +12,20 @@ Run: ./build/bms-server
 
 Docker: docker build -t bms-c . && docker run --rm -p 8080:8080 bms-c
 
+## Interactive API documentation
+
+Start the backend, then open `http://localhost:8080/docs` (or replace the host and port with your deployment URL) to use Swagger UI. The OpenAPI 3.0 specification is served at `/openapi.json`.
+
+Swagger UI supports **Try it out** for the implemented routes:
+
+- Read-only endpoints: health, telemetry, state, hardware connection, SOC, SOH and RUL.
+- Control endpoints: charge, discharge, stop and cycle-count update.
+- Device endpoint: submit voltage, current and temperature using a JSON request body.
+
+If `BMS_API_TOKEN` is configured, use Swagger's **Authorize** dialog with that bearer token for control endpoints. If `BMS_DEVICE_TOKEN` is configured, authorize with that token for `POST /update`. The tokens are separate. When either environment variable is unset, its corresponding endpoint does not require a token (compatibility mode).
+
+Swagger UI assets are loaded from jsDelivr, so the browser needs internet access to render the interactive interface. The OpenAPI document itself is served by the BMS backend.
+
 ## API compatibility
 
 GET / and /health: liveness.

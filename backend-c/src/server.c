@@ -63,7 +63,7 @@ static enum MHD_Result handle(struct MHD_Connection*c,const char*url,const char*
 }
 static enum MHD_Result access_cb(void*cls,struct MHD_Connection*c,const char*url,const char*method,const char*ver,const char*data,size_t*size,void**ctx){
  (void)cls;(void)ver;Request*r=*ctx;if(!r){r=calloc(1,sizeof*r);if(!r)return MHD_NO;*ctx=r;return MHD_YES;}
- if(*size){if(r->used+*size>BODY_LIMIT)return response(c,413,"{\"error\":\"body_too_large\"}");memcpy(r->body+r->used,data,*size);r->used+=*size;r->body[r->used]='\\0';*size=0;return MHD_YES;}
+ if(*size){if(r->used+*size>BODY_LIMIT)return response(c,413,"{\"error\":\"body_too_large\"}");memcpy(r->body+r->used,data,*size);r->used+=*size;r->body[r->used]='\0';*size=0;return MHD_YES;}
  return handle(c,url,method,r->body);
 }
 static void completed(void*cls,struct MHD_Connection*c,void**ctx,enum MHD_RequestTerminationCode code){(void)cls;(void)c;(void)code;free(*ctx);*ctx=NULL;}

@@ -25,7 +25,6 @@
 static char configured_username[129];
 static unsigned char password_salt[16];
 static unsigned char password_digest[EVP_MAX_MD_SIZE];
-static unsigned int password_digest_length;
 static unsigned char session_secret[64];
 static size_t session_secret_length;
 static bool auth_ready;
@@ -187,7 +186,6 @@ bool auth_init(const char *username, const char *password, const char *secret)
     memcpy(configured_username, username, strlen(username) + 1);
     memcpy(session_secret, secret, strlen(secret));
     session_secret_length = strlen(secret);
-    password_digest_length = (unsigned int)sizeof(password_digest);
     auth_ready = true;
 
     return true;
@@ -412,7 +410,6 @@ void auth_clear_secrets(void)
     OPENSSL_cleanse(password_salt, sizeof(password_salt));
     OPENSSL_cleanse(password_digest, sizeof(password_digest));
     OPENSSL_cleanse(session_secret, sizeof(session_secret));
-    password_digest_length = 0;
     session_secret_length = 0;
     auth_ready = false;
 }

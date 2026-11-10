@@ -1,4 +1,4 @@
-#include "bms.h"
+#define _POSIX_C_SOURCE 200809L\n#include "bms.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>

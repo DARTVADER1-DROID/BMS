@@ -562,6 +562,19 @@ static enum MHD_Result handle_control_request(
         success_message = "Battery stopped";
     } else if (strcmp(url, "/cycles") == 0) {
         int64_t cycle_count;
+        const char *count_parameter = MHD_lookup_connection_value(
+            connection,
+            MHD_GET_ARGUMENT_KIND,
+            "count"
+        );
+
+        if (count_parameter == NULL || *count_parameter == '\0') {
+            return send_response(
+                connection,
+                400,
+                "{\"error\":\"count_required\"}"
+            );
+        }
 
         if (!read_cycle_count(connection, &cycle_count)) {
             return send_response(

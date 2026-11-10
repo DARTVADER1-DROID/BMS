@@ -741,9 +741,6 @@ static enum MHD_Result handle_auth_request(
         }
         auth_login_succeeded(connection);
         cJSON_Delete(json);
-            return send_response(connection, 401, "{\"error\":\"invalid_credentials\"}");
-        }
-        cJSON_Delete(json);
 
         if (!auth_create_session(auth_username, session_value, sizeof(session_value),
                                  csrf_value, sizeof(csrf_value))) {

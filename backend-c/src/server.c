@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "bms.h"
+#include "auth.h"
+#include <openssl/crypto.h>
 
 #include <microhttpd.h>
 #include <cjson/cJSON.h>
@@ -20,8 +22,8 @@
 static Bms g_bms;
 static volatile sig_atomic_t server_running = 1;
 
-static const char *api_token;
 static const char *device_token;
+static const char *auth_username;
 static const char *cors_origin;
 
 static const char OPENAPI_DOCUMENT[] = "{\"openapi\":\"3.0.3\",\"info\":{\"title\":\"BMS C Backend API\",\"version\":\"1.0.0\",\"description\":\"Interactive API reference for the native C BMS backend. Control is disabled until explicitly commissioned. BMS_API_TOKEN protects control routes when configured; BMS_DEVICE_TOKEN protects telemetry updates when configured. Authentication is not required for a token whose environment variable is unset.\"},\"tags\":[{\"name\":\"System\",\"description\":\"Health and connectivity\"},{\"name\":\"Telemetry\",\"description\":\"Live battery measurements\"},{\"name\":\"Estimation\",\"description\":\"Legacy SOC, SOH and RUL indicators\"},{\"name\":\"Control\",\"description\":\"Supervisory control commands\"},{\"name\":\"Device\",\"description\":\"ESP32 telemetry ingestion\"}],\"components\":{\"securitySchemes\":{\"ControlBearer\":{\"type\":\"http\",\"scheme\":\"bearer\",\"bearerFormat\":\"Token\",\"description\":\"Optional BMS_API_TOKEN. Required by control routes only when configured on the server.\"},\"DeviceBearer\":{\"type\":\"http\",\"scheme\":\"bearer\",\"bearerFormat\":\"Token\",\"description\":\"Optional BMS_DEVICE_TOKEN. Required by POST /update only when configured on the server.\"}},\"schemas\":{\"HealthResponse\":{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\",\"example\":\"connected\"},\"implementation\":{\"type\":\"string\",\"example\":\"c\"},\"control_enabled\":{\"type\":\"boolean\",\"example\":false}}},\"TelemetryResponse\":{\"type\":\"object\",\"properties\":{\"voltage\":{\"type\":\"number\",\"format\":\"double\",\"example\":3.92},\"current\":{\"type\":\"number\",\"format\":\"double\",\"example\":0.45},\"temperature\":{\"type\":\"number\",\"format\":\"double\",\"example\":28.4},\"time\":{\"type\":\"number\",\"format\":\"double\",\"description\":\"Monotonic timestamp of last telemetry update\"},\"hardware_connection\":{\"type\":\"boolean\",\"example\":true}}},\"StateResponse\":{\"type\":\"object\",\"properties\":{\"state\":{\"type\":\"string\",\"example\""
@@ -106,6 +108,40 @@ static bool request_is_authorized(
     return tokens_match(authorization_header + 7, expected_token);
 }
 
+
+static enum MHD_Result send_auth_response(
+    struct MHD_Connection *connection,
+    unsigned int status_code,
+    const char *body,
+    const char *session_cookie,
+    const char *csrf_cookie
+)
+{
+    struct MHD_Response *response = MHD_create_response_from_buffer(
+        strlen(body), (void *)body, MHD_RESPMEM_MUST_COPY
+    );
+    enum MHD_Result result;
+
+    if (response == NULL) {
+        return MHD_NO;
+    }
+
+    MHD_add_response_header(response, "Content-Type", "application/json; charset=utf-8");
+    MHD_add_response_header(response, "Cache-Control", "no-store");
+    MHD_add_response_header(response, "X-Content-Type-Options", "nosniff");
+    MHD_add_response_header(response, "Set-Cookie", session_cookie);
+    if (csrf_cookie != NULL) {
+        MHD_add_response_header(response, "Set-Cookie", csrf_cookie);
+    }
+    MHD_add_response_header(response, "Access-Control-Allow-Origin", cors_origin);
+    MHD_add_response_header(response, "Access-Control-Allow-Credentials", "true");
+    MHD_add_response_header(response, "Vary", "Origin");
+
+    result = MHD_queue_response(connection, status_code, response);
+    MHD_destroy_response(response);
+    return result;
+}
+
 static enum MHD_Result send_response(
     struct MHD_Connection *connection,
     unsigned int status_code,
@@ -140,15 +176,15 @@ static enum MHD_Result send_response(
         "X-Content-Type-Options",
         "nosniff"
     );
-    MHD_add_response_header(
-        http_response,
-        "Access-Control-Allow-Origin",
-        cors_origin != NULL ? cors_origin : "*"
-    );
+    if (cors_origin != NULL && cors_origin[0] != '\0') {
+        MHD_add_response_header(http_response, "Access-Control-Allow-Origin", cors_origin);
+        MHD_add_response_header(http_response, "Access-Control-Allow-Credentials", "true");
+        MHD_add_response_header(http_response, "Vary", "Origin");
+    }
     MHD_add_response_header(
         http_response,
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
+        "Content-Type, Authorization, X-CSRF-Token"
     );
     MHD_add_response_header(
         http_response,
@@ -457,7 +493,7 @@ static enum MHD_Result handle_telemetry_update(
     double temperature;
     bool valid_telemetry;
 
-    if (!request_is_authorized(connection, device_token)) {
+    if (device_token == NULL || device_token[0] == '\0' || !request_is_authorized(connection, device_token)) {
         return send_response(
             connection,
             401,
@@ -587,14 +623,6 @@ static enum MHD_Result handle_control_request(
     cJSON *json;
     enum MHD_Result response_result;
 
-    if (!request_is_authorized(connection, api_token)) {
-        return send_response(
-            connection,
-            401,
-            "{\"error\":\"unauthorized\"}"
-        );
-    }
-
     if (strcmp(url, "/charge") == 0) {
         operation_result = bms_start_charging(&g_bms);
         success_message = "Charging started";
@@ -652,6 +680,93 @@ static enum MHD_Result handle_control_request(
     return response_result;
 }
 
+
+static enum MHD_Result handle_auth_request(
+    struct MHD_Connection *connection,
+    const char *url,
+    const char *method,
+    const char *body
+)
+{
+    if (strcmp(url, "/auth/me") == 0 && strcmp(method, MHD_HTTP_METHOD_GET) == 0) {
+        char username[129];
+        cJSON *json;
+        enum MHD_Result result;
+
+        if (!auth_read_session(connection, username, sizeof(username))) {
+            return send_response(connection, 401, "{\"error\":\"unauthenticated\"}");
+        }
+
+        json = create_json_object();
+        cJSON_AddStringToObject(json, "username", username);
+        result = send_json_response(connection, 200, json);
+        cJSON_Delete(json);
+        return result;
+    }
+
+    if (strcmp(method, MHD_HTTP_METHOD_POST) != 0) {
+        return send_response(connection, 405, "{\"error\":\"method_not_allowed\"}");
+    }
+
+    if (strcmp(url, "/auth/login") == 0) {
+        cJSON *json = cJSON_Parse(body != NULL ? body : "");
+        cJSON *user = json != NULL ? cJSON_GetObjectItemCaseSensitive(json, "username") : NULL;
+        cJSON *pass = json != NULL ? cJSON_GetObjectItemCaseSensitive(json, "password") : NULL;
+        char session_value[320];
+        char csrf_value[65];
+        char session_header[420];
+        char csrf_header[180];
+        char response_body[256];
+        enum MHD_Result result;
+
+        if (!cJSON_IsString(user) || !cJSON_IsString(pass)
+            || user->valuestring == NULL || pass->valuestring == NULL
+            || strlen(user->valuestring) > 128 || strlen(pass->valuestring) > 1024) {
+            cJSON_Delete(json);
+            return send_response(connection, 400, "{\"error\":\"invalid_credentials\"}");
+        }
+
+        if (!auth_verify_credentials(user->valuestring, pass->valuestring)) {
+            cJSON_Delete(json);
+            return send_response(connection, 401, "{\"error\":\"invalid_credentials\"}");
+        }
+        cJSON_Delete(json);
+
+        if (!auth_create_session(auth_username, session_value, sizeof(session_value),
+                                 csrf_value, sizeof(csrf_value))) {
+            return send_response(connection, 500, "{\"error\":\"session_creation_failed\"}");
+        }
+
+        (void)snprintf(session_header, sizeof(session_header),
+            "bms_session=%s; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None",
+            session_value);
+        (void)snprintf(csrf_header, sizeof(csrf_header),
+            "bms_csrf=%s; Path=/; Max-Age=28800; Secure; SameSite=None", csrf_value);
+        (void)snprintf(response_body, sizeof(response_body),
+            "{\"authenticated\":true,\"username\":\"%s\"}", auth_username);
+
+        result = send_auth_response(connection, 200, response_body, session_header, csrf_header);
+        OPENSSL_cleanse(session_value, sizeof(session_value));
+        OPENSSL_cleanse(csrf_value, sizeof(csrf_value));
+        return result;
+    }
+
+    if (strcmp(url, "/auth/logout") == 0) {
+        static const char clear_session[] =
+            "bms_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None";
+        static const char clear_csrf[] =
+            "bms_csrf=; Path=/; Max-Age=0; Secure; SameSite=None";
+
+        if (!auth_validate_csrf(connection)) {
+            return send_response(connection, 403, "{\"error\":\"csrf_failed\"}");
+        }
+        return send_auth_response(connection, 200, "{\"authenticated\":false}",
+                                  clear_session, clear_csrf);
+    }
+
+    return send_response(connection, 404, "{\"error\":\"not_found\"}");
+}
+
 static enum MHD_Result handle_request(
     struct MHD_Connection *connection,
     const char *url,
@@ -661,6 +776,10 @@ static enum MHD_Result handle_request(
 {
     if (strcmp(method, MHD_HTTP_METHOD_OPTIONS) == 0) {
         return send_response(connection, 204, "");
+    }
+
+    if (strncmp(url, "/auth/", 6) == 0) {
+        return handle_auth_request(connection, url, method, body);
     }
 
     if (strcmp(url, "/") == 0 || strcmp(url, "/health") == 0) {
@@ -678,6 +797,9 @@ static enum MHD_Result handle_request(
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_GET) == 0) {
+        if (!auth_validate_request(connection)) {
+            return send_response(connection, 401, "{\"error\":\"unauthenticated\"}");
+        }
         return handle_get_request(connection, url);
     }
 
@@ -691,6 +813,10 @@ static enum MHD_Result handle_request(
 
     if (strcmp(url, "/update") == 0) {
         return handle_telemetry_update(connection, body);
+    }
+
+    if (!auth_validate_csrf(connection)) {
+        return send_response(connection, 403, "{\"error\":\"csrf_failed\"}");
     }
 
     return handle_control_request(connection, url);
@@ -818,9 +944,18 @@ int main(void)
     signal(SIGINT, handle_shutdown_signal);
     signal(SIGTERM, handle_shutdown_signal);
 
-    api_token = getenv("BMS_API_TOKEN");
     device_token = getenv("BMS_DEVICE_TOKEN");
     cors_origin = getenv("BMS_CORS_ORIGIN");
+    auth_username = getenv("BMS_AUTH_USERNAME");
+
+    if (cors_origin == NULL || cors_origin[0] == '\0'
+        || !auth_init(auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
+        || device_token == NULL || device_token[0] == '\0') {
+        fprintf(stderr,
+            "Missing auth configuration. Set BMS_AUTH_USERNAME, BMS_AUTH_PASSWORD (12+ chars), "
+            "BMS_SESSION_SECRET (32+ chars), BMS_CORS_ORIGIN, and BMS_DEVICE_TOKEN.\n");
+        return 1;
+    }
 
     bms_init(&g_bms);
     port = configured_port();
@@ -883,6 +1018,7 @@ int main(void)
     MHD_stop_daemon(daemon);
     pthread_join(safety_thread, NULL);
     bms_destroy(&g_bms);
+    auth_clear_secrets();
 
     return 0;
 }

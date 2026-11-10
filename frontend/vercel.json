@@ -1,9 +1,10 @@
 {
   "version": 2,
   "routes": [
+    { "src": "/api/(.*)", "dest": "https://bms-c-api.onrender.com/$1" },
     { "src": "/volttrack", "dest": "/frontend/frontend-a-volttrack.html" },
-    { "src": "/rul",       "dest": "/frontend/frontend-b-rul.html" },
-    { "src": "/cycles",    "dest": "/frontend/frontend-c-cycles.html" },
-    { "src": "/(.*)",      "dest": "/frontend/$1" }
+    { "src": "/rul", "dest": "/frontend/frontend-b-rul.html" },
+    { "src": "/cycles", "dest": "/frontend/frontend-c-cycles.html" },
+    { "src": "/(.*)", "dest": "/frontend/$1" }
   ]
 }

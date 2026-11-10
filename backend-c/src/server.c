@@ -133,9 +133,11 @@ static enum MHD_Result send_auth_response(
     if (csrf_cookie != NULL) {
         MHD_add_response_header(response, "Set-Cookie", csrf_cookie);
     }
-    MHD_add_response_header(response, "Access-Control-Allow-Origin", cors_origin);
-    MHD_add_response_header(response, "Access-Control-Allow-Credentials", "true");
-    MHD_add_response_header(response, "Vary", "Origin");
+    if (cors_origin != NULL && cors_origin[0] != '\0') {
+        MHD_add_response_header(response, "Access-Control-Allow-Origin", cors_origin);
+        MHD_add_response_header(response, "Access-Control-Allow-Credentials", "true");
+        MHD_add_response_header(response, "Vary", "Origin");
+    }
 
     result = MHD_queue_response(connection, status_code, response);
     MHD_destroy_response(response);
@@ -719,15 +721,26 @@ static enum MHD_Result handle_auth_request(
         char response_body[256];
         enum MHD_Result result;
 
+        if (!auth_login_allowed(connection)) {
+            cJSON_Delete(json);
+            return send_response(connection, 429, "{\"error\":\"too_many_attempts\"}");
+        }
+
         if (!cJSON_IsString(user) || !cJSON_IsString(pass)
             || user->valuestring == NULL || pass->valuestring == NULL
             || strlen(user->valuestring) > 128 || strlen(pass->valuestring) > 1024) {
+            auth_login_failed(connection);
             cJSON_Delete(json);
             return send_response(connection, 400, "{\"error\":\"invalid_credentials\"}");
         }
 
         if (!auth_verify_credentials(user->valuestring, pass->valuestring)) {
+            auth_login_failed(connection);
             cJSON_Delete(json);
+            return send_response(connection, 401, "{\"error\":\"invalid_credentials\"}");
+        }
+        auth_login_succeeded(connection);
+        cJSON_Delete(json);
             return send_response(connection, 401, "{\"error\":\"invalid_credentials\"}");
         }
         cJSON_Delete(json);
@@ -948,12 +961,11 @@ int main(void)
     cors_origin = getenv("BMS_CORS_ORIGIN");
     auth_username = getenv("BMS_AUTH_USERNAME");
 
-    if (cors_origin == NULL || cors_origin[0] == '\0'
-        || !auth_init(auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
+    if (!auth_init(auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
         || device_token == NULL || device_token[0] == '\0') {
         fprintf(stderr,
             "Missing auth configuration. Set BMS_AUTH_USERNAME, BMS_AUTH_PASSWORD (12+ chars), "
-            "BMS_SESSION_SECRET (32+ chars), BMS_CORS_ORIGIN, and BMS_DEVICE_TOKEN.\n");
+            "BMS_SESSION_SECRET (32+ chars), and BMS_DEVICE_TOKEN.\n");
         return 1;
     }
 

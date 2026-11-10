@@ -751,9 +751,9 @@ static enum MHD_Result handle_auth_request(
             "__Host-bms_session=%s; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None",
             session_value);
         (void)snprintf(csrf_header, sizeof(csrf_header),
-            "__Host-bms_csrf=%s; Path=/; Max-Age=28800; Secure; SameSite=Lax", csrf_value);
+            "__Host-bms_csrf=%s; Path=/; Max-Age=28800; Secure; SameSite=None", csrf_value);
         (void)snprintf(response_body, sizeof(response_body),
-            "{\"authenticated\":true,\"username\":\"%s\"}", auth_username);
+            "{\"authenticated\":true,\"username\":\"%s\",\"csrf_token\":\"%s\"}", auth_username, csrf_value);
 
         result = send_auth_response(connection, 200, response_body, session_header, csrf_header);
         OPENSSL_cleanse(session_value, sizeof(session_value));
@@ -763,9 +763,9 @@ static enum MHD_Result handle_auth_request(
 
     if (strcmp(url, "/auth/logout") == 0) {
         static const char clear_session[] =
-            "__Host-bms_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
+            "__Host-bms_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None";
         static const char clear_csrf[] =
-            "__Host-bms_csrf=; Path=/; Max-Age=0; Secure; SameSite=Lax";
+            "__Host-bms_csrf=; Path=/; Max-Age=0; Secure; SameSite=None";
 
         if (!auth_validate_csrf(connection)) {
             return send_response(connection, 403, "{\"error\":\"csrf_failed\"}");

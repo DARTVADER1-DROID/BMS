@@ -2,6 +2,12 @@
   "use strict";
 
   const API_PREFIX = "/api";
+  const API_BASE = "https://bms-c-api.onrender.com";
+  let csrfValue = localStorage.getItem("bms_csrf_token") || "";
+
+  function apiUrl(path) {
+    return API_BASE + path.replace(/^\\/api/, "");
+  }
   const originalFetch = window.fetch.bind(window);
   let overlay;
   let statusNode;
@@ -9,7 +15,7 @@
 
   function csrfToken() {
     const match = document.cookie.match(/(?:^|; )__Host-bms_csrf=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : "";
+    return csrfValue || (match ? decodeURIComponent(match[1]) : "");
   }
 
   function showLogin(message) {
@@ -67,7 +73,7 @@
       button.disabled = true;
       statusNode.textContent = "Signing in…";
       try {
-        const response = await originalFetch(API_PREFIX + "/auth/login", {
+        const response = await originalFetch(apiUrl(API_PREFIX + "/auth/login"), {
           method: "POST",
           credentials: "include",
           headers: {"Content-Type": "application/json"},
@@ -77,6 +83,9 @@
           })
         });
         if (!response.ok) throw new Error("Invalid username or password.");
+        const payload = await response.json();
+        csrfValue = payload.csrf_token || "";
+        if (csrfValue) localStorage.setItem("bms_csrf_token", csrfValue);
         form.elements.password.value = "";
         hideLogin();
         window.location.reload();
@@ -94,12 +103,14 @@
     logout.textContent = "Sign out";
     logout.addEventListener("click", async () => {
       try {
-        await originalFetch(API_PREFIX + "/auth/logout", {
+        await originalFetch(apiUrl(API_PREFIX + "/auth/logout"), {
           method: "POST",
           credentials: "include",
           headers: {"X-CSRF-Token": csrfToken()}
         });
       } finally {
+        csrfValue = "";
+        localStorage.removeItem("bms_csrf_token");
         showLogin("You have signed out.");
       }
     });
@@ -112,6 +123,7 @@
     if (url.origin !== window.location.origin || !url.pathname.startsWith(API_PREFIX + "/")) {
       return originalFetch(input, init);
     }
+    const backendUrl = apiUrl(url.pathname) + url.search;
 
     const method = (init.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
     const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
@@ -123,7 +135,7 @@
       if (token) headers.set("X-CSRF-Token", token);
     }
 
-    const response = await originalFetch(input, options);
+    const response = await originalFetch(backendUrl, options);
     if (response.status === 401 && !url.pathname.endsWith("/auth/login")) {
       showLogin("Your session has expired. Please sign in again.");
     }
@@ -134,7 +146,7 @@
     showLogin,
     async check() {
       try {
-        const response = await originalFetch(API_PREFIX + "/auth/me", {credentials: "include"});
+        const response = await originalFetch(apiUrl(API_PREFIX + "/auth/me"), {credentials: "include"});
         if (!response.ok) showLogin();
       } catch {
         showLogin("Authentication service is unavailable. Try again shortly.");

@@ -1,6 +1,6 @@
 #include "auth.h"
 
-#include <stdio.h>
+#include <stdio.h>\n#include <string.h>
 
 int main(void)
 {
@@ -9,6 +9,23 @@ int main(void)
 
     if (!auth_init("bms-test", "correct horse battery", session_secret)) {
         fputs("auth_init rejected valid test configuration\n", stderr);
+        return 1;
+    }
+
+    char session_cookie[320];
+    char csrf_cookie[65];
+
+    if (!auth_create_session(
+            "bms-test",
+            session_cookie,
+            sizeof(session_cookie),
+            csrf_cookie,
+            sizeof(csrf_cookie)
+        )
+        || session_cookie[0] == '\\0'
+        || strlen(csrf_cookie) != 64) {
+        fputs("session token creation failed\\n", stderr);
+        auth_clear_secrets();
         return 1;
     }
 

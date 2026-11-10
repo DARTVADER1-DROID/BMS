@@ -1,25 +1,26 @@
 {
-  "version": 2,
-  "routes": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "rewrites": [
     {
-      "src": "^/api/(.*)$",
-      "dest": "https://bms-c-api.onrender.com/$1"
+      "source": "/api/:path*",
+      "destination": "https://bms-c-api.onrender.com/:path*"
     },
     {
-      "src": "^/$",
-      "dest": "/frontend-a-volttrack.html"
+      "source": "/",
+      "destination": "/frontend-a-volttrack.html"
     },
     {
-      "src": "^/volttrack/?$",
-      "dest": "/frontend-a-volttrack.html"
+      "source": "/volttrack",
+      "destination": "/frontend-a-volttrack.html"
     },
     {
-      "src": "^/rul/?$",
-      "dest": "/frontend-b-rul.html"
+      "source": "/rul",
+      "destination": "/frontend-b-rul.html"
     },
     {
-      "src": "^/cycles/?$",
-      "dest": "/frontend-c-cycles.html"
+      "source": "/cycles",
+      "destination": "/frontend-c-cycles.html"
     }
   ]
 }

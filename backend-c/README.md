@@ -47,3 +47,22 @@ The legacy empirical SOH curve is retained for API compatibility but is not vali
 ## Deployment
 
 The root Dockerfile builds the native service and runs core tests in the build stage. Configure PORT, safety limits, and tokens as deployment environment variables. Keep the Python backend available until API compatibility and hardware-in-the-loop acceptance tests pass.
+
+## Rapid Battery Health Estimator (RBHE)
+
+A standalone, fixed-memory C diagnostic module is available in `include/rbhe.h` and `src/rbhe.c`. It consumes timestamped voltage/current/temperature samples from a controlled discharge pulse followed by an unloaded recovery period. It extracts:
+- step resistance (baseline-to-first-loaded-sample voltage change / mean discharge current),
+- steady pulse resistance (baseline-to-mean-loaded-voltage / mean discharge current),
+- loaded voltage slope,
+- voltage recovery fraction and recovery elapsed time,
+- temperature rise and temperature slope.
+
+The estimator does **not** claim that these pulse features directly measure capacity SOH. Capacity SOH is withheld unless a calibration object is supplied. Calibration coefficients must be trained and independently validated against cells of the same model/chemistry using capacity measurements from controlled reference tests. The output includes the calibration's validation error as a confidence indicator; it is not a statistical confidence interval.
+
+RUL is withheld until at least three chronological SOH observations paired with equivalent full-cycle counts are available. A least-squares degradation slope is then extrapolated to an 80% SOH end-of-life threshold by the convenience result path. The lower-level RUL function accepts an explicit threshold. This linear extrapolation is only a provisional forecast and must not be used for safety decisions.
+
+RBHE uses fixed-size buffers (no heap allocation). Default diagnostic limits are conservative software placeholders, **not manufacturer-approved charge/discharge limits**. Confirm the exact cell datasheet and hardware protection thresholds before testing. The current 1S HONGLI cell's maximum discharge current is not yet known; the default pulse ceiling is 1 A only as a conservative diagnostic design cap, not a verified cell rating. Do not run a pulse unless the actual load, wiring, sensor range, cell condition and protection hardware have been checked.
+
+The current firmware's generic ADC formulas are not ACS712/voltage-divider/NTC calibration. In particular, the ACS712-20A's nominal sensitivity is 100 mV/A, but its output offset, supply, any output divider, ESP32 ADC calibration and zero-current drift must be measured. The selected 10 kOhm B3950 NTC is a planned replacement until its installation is confirmed. The estimator is a standalone library at this stage; it is not yet exposed through the HTTP API or connected to relay control.
+
+Sampling should be faster than the legacy ~300 ms acquisition interval for reliable step-resistance identification. Use timestamped samples, a stable rest baseline, a controlled constant-current load, and several unloaded recovery samples. The initial loaded sample must be captured promptly after load application. Tests must be run on a protected test setup, not unattended.

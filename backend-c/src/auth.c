@@ -202,6 +202,7 @@ bool auth_create_session(
 )
 {
     unsigned char nonce[AUTH_TOKEN_BYTES];
+    unsigned char csrf_random[AUTH_TOKEN_BYTES];
     unsigned char signature[EVP_MAX_MD_SIZE];
     unsigned int signature_length = 0;
     char nonce_hex[AUTH_HEX_SIZE];
@@ -213,19 +214,14 @@ bool auth_create_session(
     if (!auth_ready || username == NULL
         || strcmp(username, configured_username) != 0
         || RAND_bytes(nonce, (int)sizeof(nonce)) != 1
-        || RAND_bytes((unsigned char *)csrf_cookie, AUTH_TOKEN_BYTES) != 1) {
+        || RAND_bytes(csrf_random, (int)sizeof(csrf_random)) != 1) {
         return false;
     }
 
     if (csrf_cookie_size < AUTH_HEX_SIZE
         || session_cookie_size < 256
         || !to_hex(nonce, sizeof(nonce), nonce_hex, sizeof(nonce_hex))
-        || !to_hex(
-            (const unsigned char *)csrf_cookie,
-            AUTH_TOKEN_BYTES,
-            csrf_cookie,
-            csrf_cookie_size
-        )) {
+        || !to_hex(csrf_random, sizeof(csrf_random), csrf_cookie, csrf_cookie_size)) {
         return false;
     }
 
@@ -261,6 +257,7 @@ bool auth_create_session(
     }
 
     OPENSSL_cleanse(nonce, sizeof(nonce));
+    OPENSSL_cleanse(csrf_random, sizeof(csrf_random));
     OPENSSL_cleanse(signature, sizeof(signature));
     return true;
 }
@@ -273,16 +270,14 @@ bool auth_read_session(
 {
     char token[320];
     char payload[160];
-    char provided_signature_hex[EVP_MAX_MD_SIZE * 2 + 1];
-    char expected_signature_hex[EVP_MAX_MD_SIZE * 2 + 1];
     unsigned char expected_signature[EVP_MAX_MD_SIZE];
     unsigned char provided_signature[EVP_MAX_MD_SIZE];
     unsigned int expected_length = 0;
-    char *last_separator;
+    char *signature_separator;
+    char *username_separator;
     char *expiry_separator;
-    char *nonce_separator;
-    long long expires_at;
     char *end = NULL;
+    long long expires_at;
     size_t payload_length;
 
     if (!auth_ready || !read_cookie(
@@ -294,23 +289,15 @@ bool auth_read_session(
         return false;
     }
 
-    last_separator = strrchr(token, '.');
+    signature_separator = strrchr(token, '.');
 
-    if (last_separator == NULL) {
+    if (signature_separator == NULL
+        || strlen(signature_separator + 1) != 64
+        || !from_hex(signature_separator + 1, provided_signature, 32)) {
         return false;
     }
 
-    *last_separator = '\0';
-
-    if (strlen(last_separator + 1) != 64
-        || !from_hex(
-            last_separator + 1,
-            provided_signature,
-            32
-        )) {
-        return false;
-    }
-
+    *signature_separator = '\\0';
     payload_length = strlen(token);
 
     if (payload_length >= sizeof(payload)) {
@@ -318,51 +305,71 @@ bool auth_read_session(
     }
 
     memcpy(payload, token, payload_length + 1);
+    username_separator = strchr(payload, '.');
 
-    expiry_separator = strrchr(payload, '.');
-
-    if (expiry_separator == NULL) {
+    if (username_separator == NULL) {
         return false;
     }
 
-    nonce_separator = expiry_separator - 64;
+    expiry_separator = strchr(username_separator + 1, '.');
 
-    if (nonce_separator <= payload
-        || nonce_separator[0] != '.') {
+    if (expiry_separator == NULL
+        || strlen(expiry_separator + 1) != 64
+        || (size_t)(username_separator - payload) >= username_size) {
         return false;
     }
 
-    *expiry_separator = '\0';
-    *nonce_separator = '\0';
+    *username_separator = '\\0';
+    *expiry_separator = '\\0';
+    expires_at = strtoll(username_separator + 1, &end, 10);
 
-    if (strlen(payload) == 0
-        || strlen(payload) >= username_size
-        || strlen(nonce_separator + 1) != 64) {
-        return false;
-    }
-
-    expires_at = strtoll(expiry_separator + 1, &end, 10);
-
-    if (end == expiry_separator + 1 || *end != '\0'
+    if (end == username_separator + 1 || *end != '\\0'
         || expires_at <= (long long)time(NULL)
-        || expires_at > (long long)time(NULL) + AUTH_SESSION_SECONDS) {
-        return false;
-    }
-
-    if (strcmp(payload, configured_username) != 0
+        || expires_at > (long long)time(NULL) + AUTH_SESSION_SECONDS
+        || strcmp(payload, configured_username) != 0
         || !session_signature(token, expected_signature, &expected_length)
         || expected_length != 32
-        || !constant_time_equal(
-            expected_signature,
-            provided_signature,
-            32
-        )) {
+        || !constant_time_equal(expected_signature, provided_signature, 32)) {
+        OPENSSL_cleanse(expected_signature, sizeof(expected_signature));
         return false;
     }
 
     memcpy(username, payload, strlen(payload) + 1);
     OPENSSL_cleanse(expected_signature, sizeof(expected_signature));
+    OPENSSL_cleanse(provided_signature, sizeof(provided_signature));
     return true;
+}
+
+bool auth_verify_credentials(const char *username, const char *password)
+{
+    unsigned char candidate[EVP_MAX_MD_SIZE];
+    int result;
+
+    if (!auth_ready || username == NULL || password == NULL
+        || strcmp(username, configured_username) != 0
+        || strlen(password) > 1024) {
+        return false;
+    }
+
+    result = PKCS5_PBKDF2_HMAC(
+        password,
+        (int)strlen(password),
+        password_salt,
+        (int)sizeof(password_salt),
+        AUTH_PASSWORD_ITERATIONS,
+        EVP_sha256(),
+        (int)sizeof(candidate),
+        candidate
+    );
+
+    if (result != 1) {
+        OPENSSL_cleanse(candidate, sizeof(candidate));
+        return false;
+    }
+
+    result = constant_time_equal(candidate, password_digest, sizeof(candidate));
+    OPENSSL_cleanse(candidate, sizeof(candidate));
+    return result != 0;
 }
 
 bool auth_validate_request(struct MHD_Connection *connection)

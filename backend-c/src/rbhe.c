@@ -131,7 +131,7 @@ RbheResult rbhe_finish(Rbhe *e, RbheResultData *r) {
     r->recovery_fraction = total_drop > 1e-6
         ? clampd((e->recovery_voltage_v - e->min_load_voltage_v) / total_drop, 0.0, 1.5)
         : 0.0;
-    r->recovery_time_constant_s = e->recovery_time_s;
+    r->recovery_elapsed_s = e->recovery_time_s;
     r->temperature_rise_c = e->samples[e->sample_count-1].temperature_c -
                             e->baseline_temperature_c;
     r->temperature_slope_c_per_s = r->temperature_rise_c / duration;

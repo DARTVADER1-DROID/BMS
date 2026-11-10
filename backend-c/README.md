@@ -4,7 +4,7 @@ Native C implementation of the BMS backend. The frontend remains available and c
 
 ## Build
 
-Install build-essential, cmake, pkg-config, libmicrohttpd-dev and libcjson-dev.
+Install build-essential, cmake, pkg-config, libmicrohttpd-dev, libcjson-dev and libssl-dev.
 Run: cmake -S backend-c -B build -DCMAKE_BUILD_TYPE=Release
 Then: cmake --build build --parallel
 Then: ctest --test-dir build --output-on-failure
@@ -22,7 +22,7 @@ Swagger UI supports **Try it out** for the implemented routes:
 - Control endpoints: charge, discharge, stop and cycle-count update.
 - Device endpoint: submit voltage, current and temperature using a JSON request body.
 
-If `BMS_API_TOKEN` is configured, use Swagger's **Authorize** dialog with that bearer token for control endpoints. If `BMS_DEVICE_TOKEN` is configured, authorize with that token for `POST /update`. The tokens are separate. When either environment variable is unset, its corresponding endpoint does not require a token (compatibility mode).
+Human dashboard access uses `POST /auth/login`. The browser receives an HttpOnly, Secure, host-only session cookie and a separate CSRF cookie. `GET /auth/me` reports the signed-in account and `POST /auth/logout` clears the browser session. All dashboard data and control endpoints require a valid session; state-changing browser requests must include the CSRF token.
 
 Swagger UI assets are loaded from jsDelivr, so the browser needs internet access to render the interactive interface. The OpenAPI document itself is served by the BMS backend.
 
@@ -38,7 +38,10 @@ GET /s_o_h: legacy empirical SOH estimate.
 GET /r_u_l: rated-cycle subtraction estimate.
 POST /charge, /discharge, /stop: control commands.
 POST /cycles?count=N: set cycle count.
-POST /update: submit telemetry JSON.
+POST /update: submit telemetry JSON using the separate device bearer token.
+POST /auth/login: authenticate with the configured dashboard account.
+GET /auth/me: inspect the current login session.
+POST /auth/logout: end the browser session.
 
 Existing dashboard response field names are retained. Rejected state transitions now return meaningful HTTP error codes.
 
@@ -48,7 +51,16 @@ Control is disabled by default. The server accepts telemetry but /charge and /di
 
 Set BMS_ENABLE_CONTROL=1 and explicitly configure BMS_VOLTAGE_MIN, BMS_VOLTAGE_MAX, BMS_CURRENT_MIN, BMS_CURRENT_MAX, BMS_TEMPERATURE_MIN and BMS_TEMPERATURE_MAX using actual battery and sensor specifications. SOC bounds are configurable with BMS_SOC_VOLTAGE_MIN and BMS_SOC_VOLTAGE_MAX. Generic defaults are not battery calibration.
 
-If BMS_API_TOKEN is set, control and cycle-update requests require Authorization: Bearer token. If BMS_DEVICE_TOKEN is set, telemetry updates require the device token. Unset tokens preserve old unauthenticated API compatibility; do not expose that configuration publicly. Set BMS_CORS_ORIGIN to the exact dashboard origin in production.
+Configure these required Render environment variables before starting the service:
+
+- `BMS_AUTH_USERNAME`: the dashboard login name (letters, digits, dot, underscore and hyphen only).
+- `BMS_AUTH_PASSWORD`: the dashboard password (at least 12 characters). It is PBKDF2-HMAC-SHA256 hashed with 600,000 iterations and a fresh random salt at startup; the plaintext is read only from the server environment.
+- `BMS_SESSION_SECRET`: a persistent random secret of 32–64 characters. Generate one with `openssl rand -hex 32`. Keep it unchanged across deploys or all active sessions will become invalid.
+- `BMS_DEVICE_TOKEN`: a separate, required bearer token for device telemetry ingestion. An unset token now prevents `POST /update`.
+
+The frontend uses the same-origin `/api/*` proxy configured in `frontend/vercel.json`, so cookie-based authentication does not depend on permissive cross-origin CORS. Do not remove that proxy unless you configure a precise allowed origin and credentialed CORS.
+
+This no-database mode supports one configured login account. Password changes, multiple accounts and server-side per-session revocation require persistent storage and are intentionally not implemented. Sessions are signed, stateless, expire after eight hours, and are invalidated globally by rotating `BMS_SESSION_SECRET`; logout clears the browser's cookie but cannot revoke a copied cookie before expiry.
 
 The safety worker checks telemetry freshness every 250 ms. A heartbeat older than 7 seconds marks hardware disconnected and returns the requested state to idle. Invalid/non-finite telemetry is rejected. Shared state is mutex-protected.
 
@@ -60,7 +72,7 @@ The legacy empirical SOH curve is retained for API compatibility but is not vali
 
 ## Deployment
 
-The root Dockerfile builds the native service and runs core tests in the build stage. Configure PORT, safety limits, and tokens as deployment environment variables. The legacy Python API has been removed; deploy and maintain the native C service.
+The root Dockerfile builds the native service and runs core tests in the build stage. Configure PORT, safety limits and the required authentication/device environment variables as deployment environment variables. The legacy Python API has been removed; deploy and maintain the native C service.
 
 ## Rapid battery diagnostic modules
 

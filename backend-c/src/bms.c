@@ -39,7 +39,8 @@ BmsResult bms_update_telemetry(Bms*b,double v,double a,double t,double now){
 }
 static BmsResult start_state(Bms*b,BmsState target){
  pthread_mutex_lock(&b->lock);
- if(!b->control_enabled){pthread_mutex_unlock(&b->lock);return BMS_ERR_DISABLED;}\n if(!b->hardware_connected){pthread_mutex_unlock(&b->lock);return BMS_ERR_UNSAFE;}
+ if(!b->control_enabled){pthread_mutex_unlock(&b->lock);return BMS_ERR_DISABLED;}
+ if(!b->hardware_connected){pthread_mutex_unlock(&b->lock);return BMS_ERR_UNSAFE;}
  if(!safe_unlocked(b)){b->state=BMS_IDLE;pthread_mutex_unlock(&b->lock);return BMS_ERR_UNSAFE;}
  if(b->state!=BMS_IDLE){pthread_mutex_unlock(&b->lock);return BMS_ERR_TRANSITION;}
  b->state=target;pthread_mutex_unlock(&b->lock);return BMS_OK;

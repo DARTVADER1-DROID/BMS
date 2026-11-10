@@ -355,7 +355,7 @@ bool auth_read_session(
         return false;
     }
 
-    *signature_separator = '\\0';
+    *signature_separator = '\0';
     payload_length = strlen(token);
 
     if (payload_length >= sizeof(payload)) {
@@ -377,11 +377,11 @@ bool auth_read_session(
         return false;
     }
 
-    *username_separator = '\\0';
-    *expiry_separator = '\\0';
+    *username_separator = '\0';
+    *expiry_separator = '\0';
     expires_at = strtoll(username_separator + 1, &end, 10);
 
-    if (end == username_separator + 1 || *end != '\\0'
+    if (end == username_separator + 1 || *end != '\0'
         || expires_at <= (long long)time(NULL)
         || expires_at > (long long)time(NULL) + AUTH_SESSION_SECONDS
         || strcmp(payload, configured_username) != 0

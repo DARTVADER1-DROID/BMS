@@ -20,10 +20,18 @@
 
   function showLogin(message) {
     if (!overlay) return;
+
+    // Background API requests can return 401 while the login form is open.
+    // Do not steal focus from the password field on repeated calls.
+    const isOpening = overlay.hidden;
     overlay.hidden = false;
+
     if (statusNode) statusNode.textContent = message || "Sign in to access your battery dashboard.";
-    const username = overlay.querySelector("#bms-auth-username");
-    if (username) username.focus();
+
+    if (isOpening) {
+      const username = overlay.querySelector("#bms-auth-username");
+      if (username) username.focus();
+    }
   }
 
   function hideLogin() {

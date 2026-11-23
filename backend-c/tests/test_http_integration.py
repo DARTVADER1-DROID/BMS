@@ -302,7 +302,7 @@ class BmsHttpIntegrationTests(unittest.TestCase):
                 self.assertEqual(status, 400)
                 self.assertEqual(body.get("error"), "invalid_telemetry")
 
-    def test_telemetry_rejects_each_out_of_range_sensor(self):
+    def test_telemetry_records_unsafe_sensor_values_for_interlock(self):
         headers = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
         invalid_payloads = (
             {"voltage": 5.1, "current": 0.0, "temperature": 25.0},
@@ -312,8 +312,12 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         for payload in invalid_payloads:
             with self.subTest(payload=payload):
                 status, body, _ = self.request("POST", "/update", payload, headers)
-                self.assertEqual(status, 400)
-                self.assertEqual(body.get("error"), "telemetry_out_of_range")
+                self.assertEqual(status, 200)
+                state_status, state, _ = self.request(
+                    "GET", "/state", headers=self.dashboard_headers()
+                )
+                self.assertEqual(state_status, 200)
+                self.assertNotEqual(state.get("warning_messages"), "Nominal")
 
     def test_cycle_count_rejects_missing_malformed_and_overflow_values(self):
         headers = {
@@ -336,7 +340,7 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body.get("message"), "Cycle count updated")
 
-    def test_logout_requires_csrf_and_clears_session(self):
+    def test_z_logout_requires_csrf_and_clears_session(self):
         status, _, _ = self.request(
             "POST", "/auth/logout", headers=self.dashboard_headers()
         )

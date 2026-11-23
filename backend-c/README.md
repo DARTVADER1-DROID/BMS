@@ -127,3 +127,18 @@ The suite contains:
 - `http_integration_tests`: starts the actual C server with disposable credentials and tests health, OpenAPI, login, session access, device-token rejection, telemetry ingestion, invalid payloads, CSRF enforcement, disabled controls, unknown routes and HTTP methods.
 
 The HTTP integration tests use only Python's standard library. They run as part of CTest and do not require a separately running backend.
+
+
+## Backend module boundaries
+
+The native backend keeps battery-domain logic independent of HTTP and authentication:
+
+- `src/bms.c` / `include/bms.h`: BMS state, telemetry, interlocks and estimates.
+- `src/diagnostic.c`: diagnostic state machine and sample safety checks.
+- `src/battery_features.c`: pure feature calculations from completed tests.
+- `src/battery_health.c`: calibrated SOH and history-based RUL calculations.
+- `src/auth.c` / `include/auth.h`: login throttling, password verification, sessions and CSRF.
+- `src/api_docs.c` / `include/api_docs.h`: OpenAPI document and Swagger UI page.
+- `src/server.c`: HTTP transport, route dispatch, request lifecycle and process startup.
+
+Keep domain modules free of HTTP types. Keep API documentation out of request-routing code. New battery behavior belongs in the domain modules with unit tests; endpoint behavior belongs in the HTTP integration tests.

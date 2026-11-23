@@ -42,7 +42,7 @@ static bool read_cycle_count(
     return true;
 }
 
-static enum MHD_Result static handle_control_error(
+static enum MHD_Result handle_control_error(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -73,7 +73,8 @@ static enum MHD_Result static handle_control_error(
     cJSON_AddStringToObject(json, "error", error_message);
     http_add_current_state(context, json);
 
-    response_result = send_json_response(
+    response_result = http_send_json_response(
+        context,
         connection,
         status_code,
         json
@@ -83,7 +84,7 @@ static enum MHD_Result static handle_control_error(
     return response_result;
 }
 
-static enum MHD_Result control_routes_handle(
+enum MHD_Result control_routes_handle(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -113,7 +114,8 @@ static enum MHD_Result control_routes_handle(
         );
 
         if (count_parameter == NULL || *count_parameter == '\0') {
-            return send_response(
+            return http_send_response(
+                context,
                 connection,
                 400,
                 "{\"error\":\"count_required\"}"
@@ -121,7 +123,8 @@ static enum MHD_Result control_routes_handle(
         }
 
         if (!read_cycle_count(connection, &cycle_count)) {
-            return send_response(
+            return http_send_response(
+                context,
                 connection,
                 400,
                 "{\"error\":\"invalid_cycle_count\"}"
@@ -131,7 +134,8 @@ static enum MHD_Result control_routes_handle(
         operation_result = bms_set_cycles(context->bms, cycle_count);
         success_message = "Cycle count updated";
     } else {
-        return send_response(
+        return http_send_response(
+            context,
             connection,
             404,
             "{\"error\":\"not_found\"}"

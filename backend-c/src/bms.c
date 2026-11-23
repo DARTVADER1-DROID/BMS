@@ -162,6 +162,8 @@ BmsResult bms_update_telemetry(
     if (!isfinite(voltage)
         || !isfinite(current)
         || !isfinite(temperature)
+        || !isfinite(timestamp)
+        || timestamp < 0.0
         || fabs(voltage) > 1e6
         || fabs(current) > 1e6
         || fabs(temperature) > 1e4) {

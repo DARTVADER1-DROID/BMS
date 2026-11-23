@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-static enum MHD_Result http_send_auth_response(
+enum MHD_Result http_send_auth_response(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -42,7 +42,7 @@ static enum MHD_Result http_send_auth_response(
     return result;
 }
 
-static enum MHD_Result http_send_response(
+enum MHD_Result http_send_response(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -104,7 +104,7 @@ static enum MHD_Result http_send_response(
     return result;
 }
 
-static enum MHD_Result http_send_html_response(
+enum MHD_Result http_send_html_response(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -144,7 +144,7 @@ static enum MHD_Result http_send_html_response(
     return result;
 }
 
-static enum MHD_Result http_send_json_response(
+enum MHD_Result http_send_json_response(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -172,12 +172,12 @@ static enum MHD_Result http_send_json_response(
     return result;
 }
 
-static cJSON *http_create_json_object(void)
+cJSON *http_create_json_object(void)
 {
     return cJSON_CreateObject();
 }
 
-static void http_add_current_state(
+void http_add_current_state(
     const BmsServerContext *context,
     cJSON *json)
 {
@@ -192,7 +192,7 @@ static void http_add_current_state(
     pthread_mutex_unlock(&(*context->bms).lock);
 }
 
-static bool http_read_json_number(
+bool http_read_json_number(
     cJSON *json,
     const char *key,
     double *value
@@ -208,7 +208,7 @@ static bool http_read_json_number(
     return true;
 }
 
-static bool static tokens_match(const char *provided, const char *expected)
+static bool tokens_match(const char *provided, const char *expected)
 {
     size_t provided_length;
     size_t expected_length;
@@ -236,7 +236,7 @@ static bool static tokens_match(const char *provided, const char *expected)
     return difference == 0;
 }
 
-static bool http_request_is_authorized(
+bool http_request_is_authorized(
     struct MHD_Connection *connection,
     const char *expected_token
 )
@@ -261,7 +261,7 @@ static bool http_request_is_authorized(
     return tokens_match(authorization_header + 7, expected_token);
 }
 
-static double http_monotonic_time_seconds(void)
+double http_monotonic_time_seconds(void)
 {
     struct timespec timestamp;
 

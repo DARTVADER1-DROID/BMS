@@ -247,6 +247,9 @@ static bool session_signature(
 
 bool auth_init(const char *username, const char *password, const char *secret)
 {
+    unsigned char boot_nonce[32];
+    unsigned int derived_secret_length = 0;
+
     if (username == NULL || password == NULL || secret == NULL
         || username[0] == '\0' || password[0] == '\0'
         || strlen(username) > 128 || strlen(password) < 12 || strlen(password) > 1024
@@ -277,9 +280,19 @@ bool auth_init(const char *username, const char *password, const char *secret)
         return false;
     }
 
+    if (RAND_bytes(boot_nonce, (int)sizeof(boot_nonce)) != 1
+        || HMAC(EVP_sha256(), secret, (int)strlen(secret),
+                boot_nonce, sizeof(boot_nonce), session_secret,
+                &derived_secret_length) == NULL
+        || derived_secret_length != SHA256_DIGEST_LENGTH) {
+        OPENSSL_cleanse(boot_nonce, sizeof(boot_nonce));
+        OPENSSL_cleanse(session_secret, sizeof(session_secret));
+        return false;
+    }
+
+    OPENSSL_cleanse(boot_nonce, sizeof(boot_nonce));
     memcpy(configured_username, username, strlen(username) + 1);
-    memcpy(session_secret, secret, strlen(secret));
-    session_secret_length = strlen(secret);
+    session_secret_length = derived_secret_length;
     auth_ready = true;
 
     return true;

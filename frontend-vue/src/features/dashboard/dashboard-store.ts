@@ -34,7 +34,7 @@ async function refresh(): Promise<void> {
     }
     if (batteryState.status === "fulfilled") {
       state.batteryState = batteryState.value.state || "unknown";
-      state.warnings = normalizeWarnings(batteryState.value);
+      state.warnings = normalizeWarnings(batteryState.value.warning_messages);
     }
     if (hardware.status === "fulfilled") state.hardwareConnected = hardware.value.hardware_connection === true;
     if (soc.status === "fulfilled") state.soc = soc.value.s_o_c;

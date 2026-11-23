@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-const props = defineProps<{ title: string; unit: string; values: number[]; stroke: string }>();
+
+const props = defineProps<{
+  title: string;
+  unit: string;
+  values: readonly number[];
+  stroke: string;
+}>();
+
 const points = computed(() => {
   if (props.values.length < 2) return "";
   const min = Math.min(...props.values);

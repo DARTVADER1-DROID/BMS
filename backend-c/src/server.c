@@ -3,7 +3,11 @@
 #include "bms.h"
 #include "auth.h"
 #include "api_docs.h"
-#include <openssl/crypto.h>
+#include "server_context.h"
+#include "http_response.h"
+#include "auth_routes.h"
+#include "telemetry_routes.h"
+#include "control_routes.h"
 
 #include <microhttpd.h>
 #include <cjson/cJSON.h>
@@ -23,9 +27,7 @@
 static Bms g_bms;
 static volatile sig_atomic_t server_running = 1;
 
-static const char *device_token;
-static const char *auth_username;
-static const char *cors_origin;
+static BmsServerContext server_context;
 
 
 
@@ -37,15 +39,7 @@ typedef struct {
     bool body_too_large;
 } HttpRequest;
 
-static double monotonic_time_seconds(void)
-{
-    struct timespec timestamp;
 
-    clock_gettime(CLOCK_MONOTONIC, &timestamp);
-
-    return (double)timestamp.tv_sec
-        + (double)timestamp.tv_nsec / 1e9;
-}
 
 static void handle_shutdown_signal(int signal_number)
 {
@@ -53,257 +47,30 @@ static void handle_shutdown_signal(int signal_number)
     server_running = 0;
 }
 
-static bool tokens_match(const char *provided, const char *expected)
-{
-    size_t provided_length;
-    size_t expected_length;
-    unsigned char difference = 0;
-
-    if (expected == NULL || *expected == '\0') {
-        return true;
-    }
-
-    if (provided == NULL) {
-        return false;
-    }
-
-    provided_length = strlen(provided);
-    expected_length = strlen(expected);
-
-    if (provided_length != expected_length) {
-        return false;
-    }
-
-    for (size_t index = 0; index < provided_length; index++) {
-        difference |= (unsigned char)(provided[index] ^ expected[index]);
-    }
-
-    return difference == 0;
-}
-
-static bool request_is_authorized(
-    struct MHD_Connection *connection,
-    const char *expected_token
-)
-{
-    const char *authorization_header;
-
-    if (expected_token == NULL || *expected_token == '\0') {
-        return true;
-    }
-
-    authorization_header = MHD_lookup_connection_value(
-        connection,
-        MHD_HEADER_KIND,
-        "Authorization"
-    );
-
-    if (authorization_header == NULL
-        || strncmp(authorization_header, "Bearer ", 7) != 0) {
-        return false;
-    }
-
-    return tokens_match(authorization_header + 7, expected_token);
-}
 
 
-static enum MHD_Result send_auth_response(
-    struct MHD_Connection *connection,
-    unsigned int status_code,
-    const char *body,
-    const char *session_cookie,
-    const char *csrf_cookie
-)
-{
-    struct MHD_Response *response = MHD_create_response_from_buffer(
-        strlen(body), (void *)body, MHD_RESPMEM_MUST_COPY
-    );
-    enum MHD_Result result;
 
-    if (response == NULL) {
-        return MHD_NO;
-    }
 
-    MHD_add_response_header(response, "Content-Type", "application/json; charset=utf-8");
-    MHD_add_response_header(response, "Cache-Control", "no-store");
-    MHD_add_response_header(response, "X-Content-Type-Options", "nosniff");
-    MHD_add_response_header(response, "Set-Cookie", session_cookie);
-    if (csrf_cookie != NULL) {
-        MHD_add_response_header(response, "Set-Cookie", csrf_cookie);
-    }
-    if (cors_origin != NULL && cors_origin[0] != '\0') {
-        MHD_add_response_header(response, "Access-Control-Allow-Origin", cors_origin);
-        MHD_add_response_header(response, "Access-Control-Allow-Credentials", "true");
-        MHD_add_response_header(response, "Vary", "Origin");
-    }
 
-    result = MHD_queue_response(connection, status_code, response);
-    MHD_destroy_response(response);
-    return result;
-}
 
-static enum MHD_Result send_response(
-    struct MHD_Connection *connection,
-    unsigned int status_code,
-    const char *body
-)
-{
-    struct MHD_Response *http_response;
-    enum MHD_Result result;
 
-    http_response = MHD_create_response_from_buffer(
-        strlen(body),
-        (void *)body,
-        MHD_RESPMEM_MUST_COPY
-    );
 
-    if (http_response == NULL) {
-        return MHD_NO;
-    }
 
-    MHD_add_response_header(
-        http_response,
-        "Content-Type",
-        "application/json; charset=utf-8"
-    );
-    MHD_add_response_header(
-        http_response,
-        "Cache-Control",
-        "no-store"
-    );
-    MHD_add_response_header(
-        http_response,
-        "X-Content-Type-Options",
-        "nosniff"
-    );
-    if (cors_origin != NULL && cors_origin[0] != '\0') {
-        MHD_add_response_header(http_response, "Access-Control-Allow-Origin", cors_origin);
-        MHD_add_response_header(http_response, "Access-Control-Allow-Credentials", "true");
-        MHD_add_response_header(http_response, "Vary", "Origin");
-    }
-    MHD_add_response_header(
-        http_response,
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, X-CSRF-Token"
-    );
-    MHD_add_response_header(
-        http_response,
-        "Access-Control-Allow-Methods",
-        "GET, POST, OPTIONS"
-    );
 
-    result = MHD_queue_response(
-        connection,
-        status_code,
-        http_response
-    );
 
-    MHD_destroy_response(http_response);
-    return result;
-}
 
-static enum MHD_Result send_html_response(
-    struct MHD_Connection *connection,
-    unsigned int status_code,
-    const char *body
-)
-{
-    struct MHD_Response *http_response;
-    enum MHD_Result result;
 
-    http_response = MHD_create_response_from_buffer(
-        strlen(body),
-        (void *)body,
-        MHD_RESPMEM_MUST_COPY
-    );
 
-    if (http_response == NULL) {
-        return MHD_NO;
-    }
 
-    MHD_add_response_header(
-        http_response,
-        "Content-Type",
-        "text/html; charset=utf-8"
-    );
-    MHD_add_response_header(http_response, "Cache-Control", "no-store");
-    MHD_add_response_header(http_response, "X-Content-Type-Options", "nosniff");
-    MHD_add_response_header(
-        http_response,
-        "Access-Control-Allow-Origin",
-        cors_origin != NULL ? cors_origin : "*"
-    );
 
-    result = MHD_queue_response(connection, status_code, http_response);
-    MHD_destroy_response(http_response);
 
-    return result;
-}
 
-static enum MHD_Result send_json_response(
-    struct MHD_Connection *connection,
-    unsigned int status_code,
-    cJSON *json
-)
-{
-    char *serialized_json;
-    enum MHD_Result result;
-
-    serialized_json = cJSON_PrintUnformatted(json);
-
-    if (serialized_json == NULL) {
-        return send_response(
-            connection,
-            500,
-            "{\"error\":\"serialization_failed\"}"
-        );
-    }
-
-    result = send_response(connection, status_code, serialized_json);
-    free(serialized_json);
-
-    return result;
-}
-
-static cJSON *create_json_object(void)
-{
-    return cJSON_CreateObject();
-}
-
-static void add_current_state(cJSON *json)
-{
-    pthread_mutex_lock(&g_bms.lock);
-
-    cJSON_AddStringToObject(
-        json,
-        "state",
-        bms_state_name(g_bms.state)
-    );
-
-    pthread_mutex_unlock(&g_bms.lock);
-}
-
-static bool read_json_number(
-    cJSON *json,
-    const char *key,
-    double *value
-)
-{
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(json, key);
-
-    if (!cJSON_IsNumber(item) || !isfinite(item->valuedouble)) {
-        return false;
-    }
-
-    *value = item->valuedouble;
-    return true;
-}
 
 static enum MHD_Result handle_health_request(
     struct MHD_Connection *connection
 )
 {
-    cJSON *json = create_json_object();
+    cJSON *json = http_create_json_object();
     enum MHD_Result result;
 
     cJSON_AddStringToObject(json, "message", "connected");
@@ -314,7 +81,7 @@ static enum MHD_Result handle_health_request(
         g_bms.control_enabled
     );
 
-    result = send_json_response(connection, 200, json);
+    result = http_send_json_response(&server_context, connection, 200, json);
     cJSON_Delete(json);
 
     return result;
@@ -324,7 +91,7 @@ static enum MHD_Result handle_data_request(
     struct MHD_Connection *connection
 )
 {
-    cJSON *json = create_json_object();
+    cJSON *json = http_create_json_object();
     enum MHD_Result result;
 
     pthread_mutex_lock(&g_bms.lock);
@@ -341,7 +108,7 @@ static enum MHD_Result handle_data_request(
 
     pthread_mutex_unlock(&g_bms.lock);
 
-    result = send_json_response(connection, 200, json);
+    result = http_send_json_response(&server_context, connection, 200, json);
     cJSON_Delete(json);
 
     return result;
@@ -352,7 +119,7 @@ static enum MHD_Result handle_state_request(
     bool include_warning
 )
 {
-    cJSON *json = create_json_object();
+    cJSON *json = http_create_json_object();
     enum MHD_Result result;
 
     pthread_mutex_lock(&g_bms.lock);
@@ -373,7 +140,7 @@ static enum MHD_Result handle_state_request(
 
     pthread_mutex_unlock(&g_bms.lock);
 
-    result = send_json_response(connection, 200, json);
+    result = http_send_json_response(&server_context, connection, 200, json);
     cJSON_Delete(json);
 
     return result;
@@ -383,7 +150,7 @@ static enum MHD_Result handle_hardware_connection_request(
     struct MHD_Connection *connection
 )
 {
-    cJSON *json = create_json_object();
+    cJSON *json = http_create_json_object();
     enum MHD_Result result;
 
     pthread_mutex_lock(&g_bms.lock);
@@ -396,7 +163,7 @@ static enum MHD_Result handle_hardware_connection_request(
 
     pthread_mutex_unlock(&g_bms.lock);
 
-    result = send_json_response(connection, 200, json);
+    result = http_send_json_response(&server_context, connection, 200, json);
     cJSON_Delete(json);
 
     return result;
@@ -407,7 +174,7 @@ static enum MHD_Result handle_estimate_request(
     const char *url
 )
 {
-    cJSON *json = create_json_object();
+    cJSON *json = http_create_json_object();
     enum MHD_Result result;
 
     if (strcmp(url, "/s_o_c") == 0) {
@@ -442,7 +209,7 @@ static enum MHD_Result handle_estimate_request(
         );
     }
 
-    result = send_json_response(connection, 200, json);
+    result = http_send_json_response(&server_context, connection, 200, json);
     cJSON_Delete(json);
 
     return result;
@@ -475,305 +242,24 @@ static enum MHD_Result handle_get_request(
         return handle_estimate_request(connection, url);
     }
 
-    return send_response(
+    return http_send_response(
+            &server_context,
         connection,
         404,
         "{\"error\":\"not_found\"}"
     );
 }
 
-static enum MHD_Result handle_telemetry_update(
-    struct MHD_Connection *connection,
-    const char *body
-)
-{
-    cJSON *json;
-    double voltage;
-    double current;
-    double temperature;
-    bool valid_telemetry;
-
-    if (device_token == NULL || device_token[0] == '\0' || !request_is_authorized(connection, device_token)) {
-        return send_response(
-            connection,
-            401,
-            "{\"error\":\"unauthorized_device\"}"
-        );
-    }
-
-    json = cJSON_Parse(body != NULL ? body : "");
-
-    valid_telemetry =
-        json != NULL
-        && read_json_number(json, "voltage", &voltage)
-        && read_json_number(json, "current", &current)
-        && read_json_number(json, "temperature", &temperature);
-
-    cJSON_Delete(json);
-
-    if (!valid_telemetry) {
-        return send_response(
-            connection,
-            400,
-            "{\"error\":\"invalid_telemetry\"}"
-        );
-    }
-
-    if (bms_update_telemetry(
-            &g_bms,
-            voltage,
-            current,
-            temperature,
-            monotonic_time_seconds()
-        ) != BMS_OK) {
-        return send_response(
-            connection,
-            400,
-            "{\"error\":\"telemetry_out_of_range\"}"
-        );
-    }
-
-    return send_response(
-        connection,
-        200,
-        "{\"message\":\"Battery data updated\"}"
-    );
-}
-
-static bool read_cycle_count(
-    struct MHD_Connection *connection,
-    int64_t *cycle_count
-)
-{
-    const char *query_value;
-    char *end = NULL;
-    long long parsed_value;
-
-    query_value = MHD_lookup_connection_value(
-        connection,
-        MHD_GET_ARGUMENT_KIND,
-        "count"
-    );
-
-    if (query_value == NULL || *query_value == '\0') {
-        return false;
-    }
-
-    errno = 0;
-    parsed_value = strtoll(query_value, &end, 10);
-
-    if (errno != 0
-        || end == query_value
-        || *end != '\0'
-        || parsed_value < 0
-        || parsed_value > 1000000000LL) {
-        return false;
-    }
-
-    *cycle_count = (int64_t)parsed_value;
-    return true;
-}
-
-static enum MHD_Result handle_control_error(
-    struct MHD_Connection *connection,
-    BmsResult result
-)
-{
-    unsigned int status_code;
-    const char *error_message;
-    cJSON *json;
-    enum MHD_Result response_result;
-
-    status_code =
-        result == BMS_ERR_DISABLED
-            ? 503
-            : (result == BMS_ERR_INVALID ? 400 : 409);
-
-    if (result == BMS_ERR_DISABLED) {
-        error_message = "control_not_commissioned";
-    } else if (result == BMS_ERR_UNSAFE) {
-        error_message = "safety_interlock";
-    } else if (result == BMS_ERR_TRANSITION) {
-        error_message = "invalid_state_transition";
-    } else {
-        error_message = "invalid_request";
-    }
-
-    json = create_json_object();
-    cJSON_AddStringToObject(json, "error", error_message);
-    add_current_state(json);
-
-    response_result = send_json_response(
-        connection,
-        status_code,
-        json
-    );
-
-    cJSON_Delete(json);
-    return response_result;
-}
-
-static enum MHD_Result handle_control_request(
-    struct MHD_Connection *connection,
-    const char *url
-)
-{
-    BmsResult operation_result;
-    const char *success_message;
-    cJSON *json;
-    enum MHD_Result response_result;
-
-    if (strcmp(url, "/charge") == 0) {
-        operation_result = bms_start_charging(&g_bms);
-        success_message = "Charging started";
-    } else if (strcmp(url, "/discharge") == 0) {
-        operation_result = bms_start_discharging(&g_bms);
-        success_message = "Discharging started";
-    } else if (strcmp(url, "/stop") == 0) {
-        operation_result = bms_stop(&g_bms);
-        success_message = "Battery stopped";
-    } else if (strcmp(url, "/cycles") == 0) {
-        int64_t cycle_count;
-        const char *count_parameter = MHD_lookup_connection_value(
-            connection,
-            MHD_GET_ARGUMENT_KIND,
-            "count"
-        );
-
-        if (count_parameter == NULL || *count_parameter == '\0') {
-            return send_response(
-                connection,
-                400,
-                "{\"error\":\"count_required\"}"
-            );
-        }
-
-        if (!read_cycle_count(connection, &cycle_count)) {
-            return send_response(
-                connection,
-                400,
-                "{\"error\":\"invalid_cycle_count\"}"
-            );
-        }
-
-        operation_result = bms_set_cycles(&g_bms, cycle_count);
-        success_message = "Cycle count updated";
-    } else {
-        return send_response(
-            connection,
-            404,
-            "{\"error\":\"not_found\"}"
-        );
-    }
-
-    if (operation_result != BMS_OK) {
-        return handle_control_error(connection, operation_result);
-    }
-
-    json = create_json_object();
-    add_current_state(json);
-    cJSON_AddStringToObject(json, "message", success_message);
-
-    response_result = send_json_response(connection, 200, json);
-    cJSON_Delete(json);
-
-    return response_result;
-}
 
 
-static enum MHD_Result handle_auth_request(
-    struct MHD_Connection *connection,
-    const char *url,
-    const char *method,
-    const char *body
-)
-{
-    if (strcmp(url, "/auth/me") == 0 && strcmp(method, MHD_HTTP_METHOD_GET) == 0) {
-        char username[129];
-        cJSON *json;
-        enum MHD_Result result;
 
-        if (!auth_read_session(connection, username, sizeof(username))) {
-            return send_response(connection, 401, "{\"error\":\"unauthenticated\"}");
-        }
 
-        json = create_json_object();
-        cJSON_AddStringToObject(json, "username", username);
-        result = send_json_response(connection, 200, json);
-        cJSON_Delete(json);
-        return result;
-    }
 
-    if (strcmp(method, MHD_HTTP_METHOD_POST) != 0) {
-        return send_response(connection, 405, "{\"error\":\"method_not_allowed\"}");
-    }
 
-    if (strcmp(url, "/auth/login") == 0) {
-        cJSON *json = cJSON_Parse(body != NULL ? body : "");
-        cJSON *user = json != NULL ? cJSON_GetObjectItemCaseSensitive(json, "username") : NULL;
-        cJSON *pass = json != NULL ? cJSON_GetObjectItemCaseSensitive(json, "password") : NULL;
-        char session_value[320];
-        char csrf_value[65];
-        char session_header[420];
-        char csrf_header[180];
-        char response_body[512];
-        enum MHD_Result result;
 
-        if (!auth_login_allowed(connection)) {
-            cJSON_Delete(json);
-            return send_response(connection, 429, "{\"error\":\"too_many_attempts\"}");
-        }
 
-        if (!cJSON_IsString(user) || !cJSON_IsString(pass)
-            || user->valuestring == NULL || pass->valuestring == NULL
-            || strlen(user->valuestring) > 128 || strlen(pass->valuestring) > 1024) {
-            auth_login_failed(connection);
-            cJSON_Delete(json);
-            return send_response(connection, 400, "{\"error\":\"invalid_credentials\"}");
-        }
 
-        if (!auth_verify_credentials(user->valuestring, pass->valuestring)) {
-            auth_login_failed(connection);
-            cJSON_Delete(json);
-            return send_response(connection, 401, "{\"error\":\"invalid_credentials\"}");
-        }
-        auth_login_succeeded(connection);
-        cJSON_Delete(json);
 
-        if (!auth_create_session(auth_username, session_value, sizeof(session_value),
-                                 csrf_value, sizeof(csrf_value))) {
-            return send_response(connection, 500, "{\"error\":\"session_creation_failed\"}");
-        }
-
-        (void)snprintf(session_header, sizeof(session_header),
-            "__Host-bms_session=%s; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None",
-            session_value);
-        (void)snprintf(csrf_header, sizeof(csrf_header),
-            "__Host-bms_csrf=%s; Path=/; Max-Age=28800; Secure; SameSite=None", csrf_value);
-        (void)snprintf(response_body, sizeof(response_body),
-            "{\"authenticated\":true,\"username\":\"%s\",\"csrf_token\":\"%s\"}", auth_username, csrf_value);
-
-        result = send_auth_response(connection, 200, response_body, session_header, csrf_header);
-        OPENSSL_cleanse(session_value, sizeof(session_value));
-        OPENSSL_cleanse(csrf_value, sizeof(csrf_value));
-        return result;
-    }
-
-    if (strcmp(url, "/auth/logout") == 0) {
-        static const char clear_session[] =
-            "__Host-bms_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None";
-        static const char clear_csrf[] =
-            "__Host-bms_csrf=; Path=/; Max-Age=0; Secure; SameSite=None";
-
-        if (!auth_validate_csrf(connection)) {
-            return send_response(connection, 403, "{\"error\":\"csrf_failed\"}");
-        }
-        return send_auth_response(connection, 200, "{\"authenticated\":false}",
-                                  clear_session, clear_csrf);
-    }
-
-    return send_response(connection, 404, "{\"error\":\"not_found\"}");
-}
 
 static enum MHD_Result handle_request(
     struct MHD_Connection *connection,
@@ -783,11 +269,11 @@ static enum MHD_Result handle_request(
 )
 {
     if (strcmp(method, MHD_HTTP_METHOD_OPTIONS) == 0) {
-        return send_response(connection, 204, "");
+        return http_send_response(&server_context, connection, 204, "");
     }
 
     if (strncmp(url, "/auth/", 6) == 0) {
-        return handle_auth_request(connection, url, method, body);
+        return auth_routes_handle(&server_context, connection, url, method, body);
     }
 
     if (strcmp(url, "/") == 0 || strcmp(url, "/health") == 0) {
@@ -796,23 +282,24 @@ static enum MHD_Result handle_request(
 
     if (strcmp(method, MHD_HTTP_METHOD_GET) == 0
         && strcmp(url, "/docs") == 0) {
-        return send_html_response(connection, 200, SWAGGER_UI_HTML);
+        return http_send_html_response(&server_context, connection, 200, SWAGGER_UI_HTML);
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_GET) == 0
         && strcmp(url, "/openapi.json") == 0) {
-        return send_response(connection, 200, OPENAPI_DOCUMENT);
+        return http_send_response(&server_context, connection, 200, OPENAPI_DOCUMENT);
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_GET) == 0) {
         if (!auth_validate_request(connection)) {
-            return send_response(connection, 401, "{\"error\":\"unauthenticated\"}");
+            return http_send_response(&server_context, connection, 401, "{\"error\":\"unauthenticated\"}");
         }
         return handle_get_request(connection, url);
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_POST) != 0) {
-        return send_response(
+        return http_send_response(
+            &server_context,
             connection,
             405,
             "{\"error\":\"method_not_allowed\"}"
@@ -820,14 +307,14 @@ static enum MHD_Result handle_request(
     }
 
     if (strcmp(url, "/update") == 0) {
-        return handle_telemetry_update(connection, body);
+        return telemetry_routes_update(&server_context, connection, body);
     }
 
     if (!auth_validate_csrf(connection)) {
-        return send_response(connection, 403, "{\"error\":\"csrf_failed\"}");
+        return http_send_response(&server_context, connection, 403, "{\"error\":\"csrf_failed\"}");
     }
 
-    return handle_control_request(connection, url);
+    return control_routes_handle(&server_context, connection, url);
 }
 
 static enum MHD_Result access_callback(
@@ -881,7 +368,8 @@ static enum MHD_Result access_callback(
     }
 
     if (request->body_too_large) {
-        return send_response(
+        return http_send_response(
+            &server_context,
             connection,
             413,
             "{\"error\":\"body_too_large\"}"
@@ -921,7 +409,7 @@ static void *safety_monitor_thread(void *unused)
     (void)unused;
 
     while (server_running) {
-        bms_tick(&g_bms, monotonic_time_seconds());
+        bms_tick(&g_bms, http_monotonic_time_seconds());
         nanosleep(&interval, NULL);
     }
 
@@ -959,12 +447,12 @@ int main(void)
     signal(SIGINT, handle_shutdown_signal);
     signal(SIGTERM, handle_shutdown_signal);
 
-    device_token = getenv("BMS_DEVICE_TOKEN");
-    cors_origin = getenv("BMS_CORS_ORIGIN");
-    auth_username = getenv("BMS_AUTH_USERNAME");
+    server_context.device_token = getenv("BMS_DEVICE_TOKEN");
+    server_context.cors_origin = getenv("BMS_CORS_ORIGIN");
+    server_context.auth_username = getenv("BMS_AUTH_USERNAME");
 
     if (!auth_init(auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
-        || device_token == NULL || device_token[0] == '\0') {
+        || server_context.device_token == NULL || server_context.device_token[0] == '\0') {
         fprintf(stderr,
             "Missing auth configuration. Set BMS_AUTH_USERNAME, BMS_AUTH_PASSWORD (12+ chars), "
             "BMS_SESSION_SECRET (32+ chars), and BMS_DEVICE_TOKEN.\n");
@@ -972,6 +460,7 @@ int main(void)
     }
 
     bms_init(&g_bms);
+    server_context.bms = &g_bms;
     port = configured_port();
 
     if (pthread_create(

@@ -142,3 +142,19 @@ The native backend keeps battery-domain logic independent of HTTP and authentica
 - `src/server.c`: HTTP transport, route dispatch, request lifecycle and process startup.
 
 Keep domain modules free of HTTP types. Keep API documentation out of request-routing code. New battery behavior belongs in the domain modules with unit tests; endpoint behavior belongs in the HTTP integration tests.
+
+
+## HTTP server module boundaries
+
+HTTP transport and API behavior are separated into small modules:
+
+- `src/server.c`: process startup, request-body lifecycle, HTTP method dispatch, shutdown and safety-monitor thread.
+- `src/http_response.c` / `include/http_response.h`: JSON/HTML response creation, common security headers, bearer-token parsing and monotonic timestamps.
+- `src/auth_routes.c` / `include/auth_routes.h`: login, session inspection and logout.
+- `src/telemetry_routes.c` / `include/telemetry_routes.h`: device-token validation and telemetry ingestion.
+- `src/control_routes.c` / `include/control_routes.h`: charging/discharging/stop commands and cycle-count updates.
+- `src/read_routes.c` / `include/read_routes.h`: health, telemetry, state, hardware connection and estimate read endpoints.
+- `include/server_context.h`: explicit dependencies shared with route modules; avoids hidden route-level globals.
+- `src/api_docs.c`: OpenAPI and Swagger UI assets.
+
+Route modules receive a read-only server context pointer. They do not own process startup, sockets, request buffers or global server lifecycle. Keep authentication policy in the dispatcher and authentication module, and keep endpoint-specific behavior inside the corresponding route module.

@@ -8,6 +8,7 @@
 #include "auth_routes.h"
 #include "telemetry_routes.h"
 #include "control_routes.h"
+#include "read_routes.h"
 
 #include <microhttpd.h>
 #include <cjson/cJSON.h>
@@ -66,189 +67,17 @@ static void handle_shutdown_signal(int signal_number)
 
 
 
-static enum MHD_Result handle_health_request(
-    struct MHD_Connection *connection
-)
-{
-    cJSON *json = http_create_json_object();
-    enum MHD_Result result;
 
-    cJSON_AddStringToObject(json, "message", "connected");
-    cJSON_AddStringToObject(json, "implementation", "c");
-    cJSON_AddBoolToObject(
-        json,
-        "control_enabled",
-        g_bms.control_enabled
-    );
 
-    result = http_send_json_response(&server_context, connection, 200, json);
-    cJSON_Delete(json);
 
-    return result;
-}
 
-static enum MHD_Result handle_data_request(
-    struct MHD_Connection *connection
-)
-{
-    cJSON *json = http_create_json_object();
-    enum MHD_Result result;
 
-    pthread_mutex_lock(&g_bms.lock);
 
-    cJSON_AddNumberToObject(json, "voltage", g_bms.voltage);
-    cJSON_AddNumberToObject(json, "current", g_bms.current);
-    cJSON_AddNumberToObject(json, "temperature", g_bms.temperature);
-    cJSON_AddNumberToObject(json, "time", g_bms.last_seen);
-    cJSON_AddBoolToObject(
-        json,
-        "hardware_connection",
-        g_bms.hardware_connected
-    );
 
-    pthread_mutex_unlock(&g_bms.lock);
 
-    result = http_send_json_response(&server_context, connection, 200, json);
-    cJSON_Delete(json);
 
-    return result;
-}
 
-static enum MHD_Result handle_state_request(
-    struct MHD_Connection *connection,
-    bool include_warning
-)
-{
-    cJSON *json = http_create_json_object();
-    enum MHD_Result result;
 
-    pthread_mutex_lock(&g_bms.lock);
-
-    cJSON_AddStringToObject(
-        json,
-        "state",
-        bms_state_name(g_bms.state)
-    );
-
-    if (include_warning) {
-        cJSON_AddStringToObject(
-            json,
-            "warning_messages",
-            g_bms.warning
-        );
-    }
-
-    pthread_mutex_unlock(&g_bms.lock);
-
-    result = http_send_json_response(&server_context, connection, 200, json);
-    cJSON_Delete(json);
-
-    return result;
-}
-
-static enum MHD_Result handle_hardware_connection_request(
-    struct MHD_Connection *connection
-)
-{
-    cJSON *json = http_create_json_object();
-    enum MHD_Result result;
-
-    pthread_mutex_lock(&g_bms.lock);
-
-    cJSON_AddBoolToObject(
-        json,
-        "hardware_connection",
-        g_bms.hardware_connected
-    );
-
-    pthread_mutex_unlock(&g_bms.lock);
-
-    result = http_send_json_response(&server_context, connection, 200, json);
-    cJSON_Delete(json);
-
-    return result;
-}
-
-static enum MHD_Result handle_estimate_request(
-    struct MHD_Connection *connection,
-    const char *url
-)
-{
-    cJSON *json = http_create_json_object();
-    enum MHD_Result result;
-
-    if (strcmp(url, "/s_o_c") == 0) {
-        double state_of_charge = bms_soc(&g_bms);
-
-        if (isfinite(state_of_charge)) {
-            cJSON_AddNumberToObject(
-                json,
-                "s_o_c",
-                state_of_charge
-            );
-        } else {
-            cJSON_AddNullToObject(json, "s_o_c");
-        }
-    } else if (strcmp(url, "/s_o_h") == 0) {
-        double state_of_health = bms_soh(&g_bms);
-
-        if (isfinite(state_of_health)) {
-            cJSON_AddNumberToObject(
-                json,
-                "s_o_h",
-                state_of_health
-            );
-        } else {
-            cJSON_AddNullToObject(json, "s_o_h");
-        }
-    } else {
-        cJSON_AddNumberToObject(
-            json,
-            "r_u_l",
-            bms_rul(&g_bms)
-        );
-    }
-
-    result = http_send_json_response(&server_context, connection, 200, json);
-    cJSON_Delete(json);
-
-    return result;
-}
-
-static enum MHD_Result handle_get_request(
-    struct MHD_Connection *connection,
-    const char *url
-)
-{
-    if (strcmp(url, "/data") == 0) {
-        return handle_data_request(connection);
-    }
-
-    if (strcmp(url, "/state") == 0) {
-        return handle_state_request(connection, true);
-    }
-
-    if (strcmp(url, "/state-hardware") == 0) {
-        return handle_state_request(connection, false);
-    }
-
-    if (strcmp(url, "/hardware_connection") == 0) {
-        return handle_hardware_connection_request(connection);
-    }
-
-    if (strcmp(url, "/s_o_c") == 0
-        || strcmp(url, "/s_o_h") == 0
-        || strcmp(url, "/r_u_l") == 0) {
-        return handle_estimate_request(connection, url);
-    }
-
-    return http_send_response(
-            &server_context,
-        connection,
-        404,
-        "{\"error\":\"not_found\"}"
-    );
-}
 
 
 
@@ -277,7 +106,7 @@ static enum MHD_Result handle_request(
     }
 
     if (strcmp(url, "/") == 0 || strcmp(url, "/health") == 0) {
-        return handle_health_request(connection);
+        return read_routes_health(&server_context, connection);
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_GET) == 0
@@ -294,7 +123,7 @@ static enum MHD_Result handle_request(
         if (!auth_validate_request(connection)) {
             return http_send_response(&server_context, connection, 401, "{\"error\":\"unauthenticated\"}");
         }
-        return handle_get_request(connection, url);
+        return read_routes_handle(&server_context, connection, url);
     }
 
     if (strcmp(method, MHD_HTTP_METHOD_POST) != 0) {
@@ -451,7 +280,7 @@ int main(void)
     server_context.cors_origin = getenv("BMS_CORS_ORIGIN");
     server_context.auth_username = getenv("BMS_AUTH_USERNAME");
 
-    if (!auth_init(auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
+    if (!auth_init(server_context.auth_username, getenv("BMS_AUTH_PASSWORD"), getenv("BMS_SESSION_SECRET"))
         || server_context.device_token == NULL || server_context.device_token[0] == '\0') {
         fprintf(stderr,
             "Missing auth configuration. Set BMS_AUTH_USERNAME, BMS_AUTH_PASSWORD (12+ chars), "

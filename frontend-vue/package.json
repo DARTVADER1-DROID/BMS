@@ -1,0 +1,34 @@
+{
+  "name": "bms-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "vue": "3.5.46",
+    "vue-router": "4.6.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.11",
+    "prettier": "3.9.5",
+    "typescript": "6.0.3",
+    "vite": "6.4.5",
+    "vitest": "4.1.12",
+    "vue-tsc": "3.3.14",
+    "@playwright/test": "1.65.1"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.8.0"
+  }
+}

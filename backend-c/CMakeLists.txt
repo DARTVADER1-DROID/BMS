@@ -1,0 +1,95 @@
+cmake_minimum_required(VERSION 3.16)
+project(bms_backend C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(MICROHTTPD REQUIRED IMPORTED_TARGET libmicrohttpd)
+pkg_check_modules(CJSON REQUIRED IMPORTED_TARGET libcjson)
+
+add_library(
+    bms_core STATIC
+    src/bms.c
+    src/diagnostic.c
+    src/battery_features.c
+    src/battery_health.c
+)
+
+target_include_directories(bms_core PUBLIC include)
+target_link_libraries(bms_core PUBLIC Threads::Threads m)
+target_compile_options(
+    bms_core PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+)
+
+add_executable(
+    bms-server
+    src/server.c
+    src/auth.c
+    src/api_docs.c
+    src/http_response.c
+    src/auth_routes.c
+    src/telemetry_routes.c
+    src/control_routes.c
+    src/read_routes.c
+)
+target_link_libraries(
+    bms-server PRIVATE
+    bms_core
+    PkgConfig::MICROHTTPD
+    PkgConfig::CJSON
+    OpenSSL::Crypto
+)
+target_compile_options(
+    bms-server PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+)
+
+include(CTest)
+
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+    add_executable(test_bms tests/test_bms.c)
+    target_link_libraries(test_bms PRIVATE bms_core)
+    add_test(NAME bms_core_tests COMMAND test_bms)
+
+    add_executable(test_battery_diagnostics tests/test_battery_diagnostics.c)
+    target_link_libraries(test_battery_diagnostics PRIVATE bms_core)
+    add_test(NAME battery_diagnostics_tests COMMAND test_battery_diagnostics)
+
+    add_executable(test_auth tests/test_auth.c src/auth.c)
+    target_link_libraries(
+        test_auth PRIVATE
+        PkgConfig::MICROHTTPD
+        OpenSSL::Crypto
+        Threads::Threads
+    )
+    target_include_directories(test_auth PRIVATE include)
+    target_compile_options(
+        test_auth PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(NAME authentication_tests COMMAND test_auth)
+
+    add_executable(test_edge_cases tests/test_edge_cases.c)
+    target_link_libraries(test_edge_cases PRIVATE bms_core)
+    target_compile_options(
+        test_edge_cases PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(NAME bms_edge_case_tests COMMAND test_edge_cases)
+
+    add_test(
+        NAME http_integration_tests
+        COMMAND ${CMAKE_COMMAND} -E env
+            BMS_SERVER_BINARY=$<TARGET_FILE:bms-server>
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_integration.py
+    )
+endif()

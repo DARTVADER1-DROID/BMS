@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "routes": [
-    { "src": "/volttrack", "dest": "/frontend/frontend-a-volttrack.html" },
-    { "src": "/rul",       "dest": "/frontend/frontend-b-rul.html" },
-    { "src": "/cycles",    "dest": "/frontend/frontend-c-cycles.html" },
-    { "src": "/(.*)",      "dest": "/frontend/$1" }
-  ]
-}

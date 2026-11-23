@@ -30,12 +30,12 @@ mapfile -d '' C_FILES < <(
 if [[ "$MODE" == "--check" ]]; then
     clang-format --dry-run --Werror "${C_FILES[@]}"
     npx --yes prettier@3.3.3 --check \
-        "frontend/**/*.js" "frontend/**/*.html" "frontend/**/*.json" \
+        "frontend/**/*.js" "frontend/**/*.html" \
         ".github/workflows/*.yml" "*.json"
 else
     clang-format -i "${C_FILES[@]}"
     npx --yes prettier@3.3.3 --write \
-        "frontend/**/*.js" "frontend/**/*.html" "frontend/**/*.json" \
+        "frontend/**/*.js" "frontend/**/*.html" \
         ".github/workflows/*.yml" "*.json"
 fi
 

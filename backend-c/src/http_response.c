@@ -1,6 +1,6 @@
-#include "http_response.h"
-
 #define _POSIX_C_SOURCE 200809L
+
+#include "http_response.h"
 
 #include <math.h>
 #include <pthread.h>

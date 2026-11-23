@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdio.h>
 
 static void test_null_arguments_are_rejected(void)
@@ -140,6 +141,74 @@ static void test_bms_rejects_extreme_non_finite_and_stale_data(void)
     bms_destroy(&bms);
 }
 
+
+typedef struct {
+    Bms *bms;
+    unsigned int worker_id;
+} BmsWorker;
+
+static void *write_telemetry_repeatedly(void *argument)
+{
+    BmsWorker *worker = argument;
+
+    for (unsigned int index = 0; index < 5000; index++) {
+        double voltage = 3.6 + (double)((index + worker->worker_id) % 50) / 100.0;
+
+        assert(
+            bms_update_telemetry(
+                worker->bms,
+                voltage,
+                0.2,
+                25.0,
+                (double)index
+            ) == BMS_OK
+        );
+    }
+
+    return NULL;
+}
+
+static void *read_bms_state_repeatedly(void *argument)
+{
+    BmsWorker *worker = argument;
+
+    for (unsigned int index = 0; index < 5000; index++) {
+        assert(isfinite(bms_soc(worker->bms)));
+        assert(isfinite(bms_rul(worker->bms)));
+        (void)bms_is_safe(worker->bms);
+    }
+
+    return NULL;
+}
+
+static void test_concurrent_telemetry_and_readers(void)
+{
+    Bms bms;
+    pthread_t threads[4];
+    BmsWorker workers[4];
+
+    bms_init(&bms);
+
+    for (unsigned int index = 0; index < 4; index++) {
+        workers[index].bms = &bms;
+        workers[index].worker_id = index;
+
+        void *(*worker_function)(void *) =
+            index < 2
+                ? write_telemetry_repeatedly
+                : read_bms_state_repeatedly;
+
+        assert(pthread_create(&threads[index], NULL, worker_function, &workers[index]) == 0);
+    }
+
+    for (unsigned int index = 0; index < 4; index++) {
+        assert(pthread_join(threads[index], NULL) == 0);
+    }
+
+    assert(bms.hardware_connected);
+    bms_destroy(&bms);
+}
+
 int main(void)
 {
     test_null_arguments_are_rejected();
@@ -151,6 +220,7 @@ int main(void)
     test_rul_rejects_duplicate_cycle_counts();
     test_rul_rejects_non_finite_history();
     test_bms_rejects_extreme_non_finite_and_stale_data();
+    test_concurrent_telemetry_and_readers();
 
     puts("BMS edge-case tests passed");
     return 0;

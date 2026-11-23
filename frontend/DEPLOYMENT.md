@@ -1,33 +1,35 @@
 # BMS frontend deployment on Render
 
-The frontend is a static HTML application hosted as a Render Static Site.
+The replacement frontend is the Vue 3 + TypeScript + Vite application in `frontend-vue/`. The old static HTML dashboards remain in `frontend/` as a rollback copy and are no longer the intended production build.
 
-- **Render service:** `bms-dashboard`
-- **Repository:** `DARTVADER1-DROID/BMS`
-- **Branch:** `rewrite/c-backend`
-- **Publish directory:** `frontend`
-- **Build command:** `echo 'Publishing static BMS dashboards'`
-- **Public URL:** `https://bms-dashboard-xvti.onrender.com`
+## Update the existing Render Static Site
 
-## Dashboards
+- Repository: `DARTVADER1-DROID/BMS`
+- Branch: `rewrite/c-backend`
+- Root directory: `frontend-vue`
+- Build command: `npm install && npm run build`
+- Publish directory: `dist`
+- Environment variable: `VITE_API_BASE_URL=https://bms-c-api.onrender.com`
 
-- `/` redirects to VoltTrack.
-- `/volttrack/` — VoltTrack.
-- `/rul/` — Remaining useful life.
-- `/cycles/` — Cycle analysis.
+Add a Render rewrite rule for client-side routing:
+
+- Source: `/*`
+- Destination: `/index.html`
+- Action: `Rewrite`
 
 ## API and authentication
 
-The browser calls the C API at `https://bms-c-api.onrender.com`. The backend must have `BMS_CORS_ORIGIN=https://bms-dashboard-xvti.onrender.com`.
+The browser calls the C API at `https://bms-c-api.onrender.com`. Set `BMS_CORS_ORIGIN` on the backend to the exact deployed dashboard origin, for example `https://bms-dashboard-xvti.onrender.com`.
 
-The API uses credentialed CORS and Secure, HttpOnly session cookies with `SameSite=None`. The login response returns a CSRF token which the frontend retains for authenticated state-changing requests. Never use a wildcard CORS origin with credentialed requests.
+The API uses credentialed CORS and Secure session/CSRF cookies. The Vue client sends credentials with API calls and reads the CSRF cookie to add the required header to state-changing requests. Never use a wildcard CORS origin with credentialed requests.
 
-## Verify after deploy
+## Post-deployment verification
 
-1. Open the public site and confirm the dashboard renders.
-2. Confirm `/auth.js` loads.
-3. Confirm the browser displays the sign-in form when logged out.
-4. Sign in and verify telemetry requests succeed.
-5. Sign out and confirm the next protected request requires login.
+1. Open the Static Site root and confirm the Vue application loads.
+2. Confirm unauthenticated users are presented with the sign-in screen.
+3. Sign in and verify telemetry, hardware status and estimates load.
+4. Verify the charge/discharge/stop controls remain disabled while the backend reports control as uncommissioned.
+5. Verify cycle count updates and sign out.
+6. Open `/diagnostics` and `/cycles` directly to confirm SPA rewrites work.
 
-Vercel deployment configuration has been removed from this repository.
+The C backend and its API paths are unchanged. See `frontend-vue/README.md` for local development and test commands.

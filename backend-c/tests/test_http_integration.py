@@ -217,7 +217,7 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         status, _, _ = self.request(
             "POST",
             "/update",
-            {"voltage": 99, "current": 0.1, "temperature": 25},
+            {"voltage": 10000000, "current": 0.1, "temperature": 25},
             headers,
         )
         self.assertEqual(status, 400)
@@ -245,7 +245,7 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         status, _, _ = self.request("GET", "/this-route-does-not-exist", headers=self.dashboard_headers())
         self.assertEqual(status, 404)
 
-        status, _, _ = self.request("PUT", "/health")
+        status, _, _ = self.request("PUT", "/data", headers=self.dashboard_headers())
         self.assertEqual(status, 405)
 
 

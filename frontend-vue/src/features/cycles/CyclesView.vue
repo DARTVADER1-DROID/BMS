@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import { useDashboardStore } from "../dashboard/dashboard-store";
 import { MAX_CYCLE_COUNT, parseCycleCount } from "./cycle-count";
-const input = ref("");
+const input = ref<string | number>("");
 const busy = ref(false);
 const message = ref("");
 const error = ref("");
@@ -10,7 +10,7 @@ const lastSubmitted = ref<number | null>(null);
 const { updateCycleCount } = useDashboardStore();
 
 async function submit(): Promise<void> {
-  const count = parseCycleCount(input.value);
+  const count = parseCycleCount(String(input.value));
   if (count === null) {
     error.value = `Enter a whole number between 0 and ${MAX_CYCLE_COUNT.toLocaleString()}.`;
     message.value = "";

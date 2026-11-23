@@ -22,7 +22,7 @@
     "prettier": "3.9.5",
     "typescript": "6.0.3",
     "vite": "6.4.5",
-    "vitest": "4.1.10",
+    "vitest": "4.1.12",
     "vue-tsc": "3.3.14"
   },
   "engines": {

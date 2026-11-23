@@ -55,8 +55,14 @@ test("navigates between dashboard modules without losing the session", async ({ 
   await page.getByRole("link", { name: "Cycle counter" }).click();
   await expect(page.getByRole("heading", { name: "Cycle counter" })).toBeVisible();
   await page.getByLabel("New cycle count").fill("123");
+  const cycleResponsePromise = page.waitForResponse((response) =>
+    response.url().includes("/api/cycles?count=123"),
+  );
   await page.getByRole("button", { name: "Update cycle count" }).click();
-  await expect(page.getByRole("status")).toContainText("Cycle count updated successfully");
+  const cycleResponse = await cycleResponsePromise;
+  const cycleResponseBody = await cycleResponse.text();
+  expect(cycleResponse.status(), cycleResponseBody).toBe(200);
+  await expect(page.locator(".form-success")).toContainText("Cycle count updated successfully");
   await expect(page.locator(".cycle-number")).toHaveText("123");
 });
 

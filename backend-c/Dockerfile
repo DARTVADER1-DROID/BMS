@@ -6,6 +6,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         cmake \
+        python3 \
         pkg-config \
         libmicrohttpd-dev \
         libcjson-dev \

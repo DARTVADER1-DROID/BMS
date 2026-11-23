@@ -136,6 +136,7 @@ class BmsHttpIntegrationTests(unittest.TestCase):
                 return response.status, parsed, response.headers
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8")
+            error.close()
             try:
                 parsed = json.loads(body) if body else {}
             except json.JSONDecodeError:

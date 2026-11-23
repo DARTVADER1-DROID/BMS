@@ -90,3 +90,40 @@ The estimator does **not** infer capacity SOH directly from a short pulse. SOH i
 Default diagnostic thresholds are software placeholders, not manufacturer-approved cell limits. The 1 A pulse ceiling is a conservative test cap, not the cell's rated discharge current. Confirm cell datasheet, protection, wiring, load, sensor calibration and thermal installation before testing. The legacy ADC conversions are not valid ACS712/voltage-divider/NTC calibration. The 10 kOhm B3950 NTC remains a planned replacement until installation is confirmed. These modules are not yet connected to relay control or the HTTP API.
 
 Use a faster timestamped acquisition rate than the legacy 300 ms sensor loop for resistance-step capture. A safe experiment requires a controlled constant-current load, prompt first loaded sample, multiple unloaded recovery samples and hardware-level overcurrent/overtemperature protection.
+
+
+## Code formatting
+
+The repository includes one formatter entry point for native firmware/backend code and frontend assets.
+
+Requirements:
+- `clang-format` for C, C++ and Arduino `.ino` files.
+- Node.js/npm for the pinned Prettier 3.3.3 frontend formatter.
+
+Run from the repository root:
+
+```sh
+bash scripts/format.sh
+bash scripts/format.sh --check
+```
+
+The default mode formats files in place. The check mode reports formatting drift without changing files. The formatter settings live in `.clang-format` and `.prettierrc.json`.
+
+## Automated tests
+
+Configure and run the complete native test suite:
+
+```sh
+cmake -S backend-c -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+The suite contains:
+- `bms_core_tests`: BMS state transitions, telemetry validation, safety and heartbeat behavior.
+- `battery_diagnostics_tests`: pulse diagnostic flow, estimator availability and unsafe sample handling.
+- `authentication_tests`: password verification and session/CSRF token creation.
+- `bms_edge_case_tests`: null arguments, non-finite values, invalid sample timing, excessive current, invalid calibration and malformed ageing history.
+- `http_integration_tests`: starts the actual C server with disposable credentials and tests health, OpenAPI, login, session access, device-token rejection, telemetry ingestion, invalid payloads, CSRF enforcement, disabled controls, unknown routes and HTTP methods.
+
+The HTTP integration tests use only Python's standard library. They run as part of CTest and do not require a separately running backend.

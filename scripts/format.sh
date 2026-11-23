@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="\${1:---write}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODE="${1:---write}"
 
 if [[ "$MODE" != "--write" && "$MODE" != "--check" ]]; then
     echo "Usage: scripts/format.sh [--write|--check]" >&2
@@ -28,15 +28,15 @@ mapfile -d '' C_FILES < <(
 )
 
 if [[ "$MODE" == "--check" ]]; then
-    clang-format --dry-run --Werror "\${C_FILES[@]}"
+    clang-format --dry-run --Werror "${C_FILES[@]}"
     npx --yes prettier@3.3.3 --check \
         "frontend/**/*.js" "frontend/**/*.html" "frontend/**/*.json" \
         ".github/workflows/*.yml" "*.json"
 else
-    clang-format -i "\${C_FILES[@]}"
+    clang-format -i "${C_FILES[@]}"
     npx --yes prettier@3.3.3 --write \
         "frontend/**/*.js" "frontend/**/*.html" "frontend/**/*.json" \
         ".github/workflows/*.yml" "*.json"
 fi
 
-echo "Formatting \${#C_FILES[@]} C/C++ source and header files completed ($MODE)."
+echo "Formatting ${#C_FILES[@]} C/C++ source and header files completed ($MODE)."

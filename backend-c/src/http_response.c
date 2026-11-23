@@ -1,6 +1,6 @@
 #include "http_response.h"
 
-#include <math.h>
+#include <math.h>\n#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

@@ -27,7 +27,7 @@ target_compile_options(
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow
 )
 
-add_executable(bms-server src/server.c src/auth.c)
+add_executable(bms-server src/server.c src/auth.c src/api_docs.c)
 target_link_libraries(
     bms-server PRIVATE
     bms_core

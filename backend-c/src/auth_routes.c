@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static enum MHD_Result auth_routes_handle(
+enum MHD_Result auth_routes_handle(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,

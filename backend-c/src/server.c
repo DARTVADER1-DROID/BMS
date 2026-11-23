@@ -37,6 +37,7 @@ static const char SWAGGER_UI_HTML[] = "<!doctype html>\n<html lang=\"en\">\n<hea
 typedef struct {
     char body[REQUEST_BODY_LIMIT + 1];
     size_t used;
+    bool body_too_large;
 } HttpRequest;
 
 static double monotonic_time_seconds(void)
@@ -862,12 +863,11 @@ static enum MHD_Result access_callback(
     }
 
     if (*upload_data_size > 0) {
-        if (request->used + *upload_data_size > REQUEST_BODY_LIMIT) {
-            return send_response(
-                connection,
-                413,
-                "{\"error\":\"body_too_large\"}"
-            );
+        if (request->body_too_large
+            || *upload_data_size > REQUEST_BODY_LIMIT - request->used) {
+            request->body_too_large = true;
+            *upload_data_size = 0;
+            return MHD_YES;
         }
 
         memcpy(
@@ -881,6 +881,14 @@ static enum MHD_Result access_callback(
         *upload_data_size = 0;
 
         return MHD_YES;
+    }
+
+    if (request->body_too_large) {
+        return send_response(
+            connection,
+            413,
+            "{\"error\":\"body_too_large\"}"
+        );
     }
 
     return handle_request(

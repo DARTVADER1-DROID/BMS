@@ -98,6 +98,10 @@ enum MHD_Result auth_routes_handle(
         if (!auth_validate_csrf(connection)) {
             return http_send_response(context, connection, 403, "{\"error\":\"csrf_failed\"}");
         }
+        if (!auth_revoke_session(connection)) {
+            return http_send_response(context, connection, 503,
+                                      "{\"error\":\"session_revocation_unavailable\"}");
+        }
         return http_send_auth_response(context, connection, 200, "{\"authenticated\":false}",
                                   clear_session, clear_csrf);
     }

@@ -10,7 +10,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install native dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libmicrohttpd-dev libcjson-dev libssl-dev curl
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libmicrohttpd-dev libcjson-dev libssl-dev curl clang-format python3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Format source code
+        run: |
+          chmod +x scripts/format.sh
+          ./scripts/format.sh --write
+          ./scripts/format.sh --check
       - name: Configure
         run: cmake -S backend-c -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
       - name: Build

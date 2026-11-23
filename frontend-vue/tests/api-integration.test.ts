@@ -12,7 +12,7 @@ describe("API client integration contract", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("maps every read operation to the expected backend route", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({})));
     const client = createApiClient("/api", fetchMock as unknown as typeof fetch);
 
     await client.health();
@@ -47,7 +47,7 @@ describe("API client integration contract", () => {
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(expectedUrl);
     expect(options.method).toBe("POST");
-    expect(JSON.parse(String(options.body))).toEqual({});
+    expect(options.body).toBeUndefined();
   });
 
   it("preserves zero when updating the cycle counter", async () => {

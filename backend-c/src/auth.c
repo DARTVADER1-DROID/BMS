@@ -7,6 +7,7 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#include <openssl/sha.h>
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -36,6 +37,38 @@ static bool auth_ready;
 #define AUTH_RATE_BUCKETS 64
 #define AUTH_RATE_WINDOW_SECONDS 900
 #define AUTH_RATE_MAX_FAILURES 5
+
+#define AUTH_REVOKED_SESSION_CAPACITY 4096
+typedef struct {
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    time_t expires_at;
+    bool occupied;
+} RevokedSession;
+static RevokedSession revoked_sessions[AUTH_REVOKED_SESSION_CAPACITY];
+static pthread_mutex_t revoked_sessions_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static bool session_digest(const char *token, unsigned char digest[SHA256_DIGEST_LENGTH])
+{
+    unsigned int length = 0;
+    return EVP_Digest(token, strlen(token), digest, &length, EVP_sha256(), NULL) == 1
+        && length == SHA256_DIGEST_LENGTH;
+}
+
+static bool session_is_revoked(const unsigned char digest[SHA256_DIGEST_LENGTH])
+{
+    bool revoked = false;
+    time_t now = time(NULL);
+    pthread_mutex_lock(&revoked_sessions_lock);
+    for (size_t i = 0; i < AUTH_REVOKED_SESSION_CAPACITY; i++) {
+        RevokedSession *entry = &revoked_sessions[i];
+        if (entry->occupied && entry->expires_at <= now) OPENSSL_cleanse(entry, sizeof(*entry));
+        if (entry->occupied && CRYPTO_memcmp(entry->digest, digest, SHA256_DIGEST_LENGTH) == 0)
+            revoked = true;
+    }
+    pthread_mutex_unlock(&revoked_sessions_lock);
+    return revoked;
+}
+
 
 typedef struct {
     char address[INET6_ADDRSTRLEN];
@@ -331,6 +364,7 @@ bool auth_read_session(
     char payload[160];
     unsigned char expected_signature[EVP_MAX_MD_SIZE];
     unsigned char provided_signature[EVP_MAX_MD_SIZE];
+    unsigned char token_digest[SHA256_DIGEST_LENGTH];
     unsigned int expected_length = 0;
     char *signature_separator;
     char *username_separator;
@@ -347,6 +381,8 @@ bool auth_read_session(
         )) {
         return false;
     }
+
+    if (!session_digest(token, token_digest)) return false;
 
     signature_separator = strrchr(token, '.');
 
@@ -388,7 +424,8 @@ bool auth_read_session(
         || strcmp(payload, configured_username) != 0
         || !session_signature(token, expected_signature, &expected_length)
         || expected_length != 32
-        || !constant_time_equal(expected_signature, provided_signature, 32)) {
+        || !constant_time_equal(expected_signature, provided_signature, 32)
+        || session_is_revoked(token_digest)) {
         OPENSSL_cleanse(expected_signature, sizeof(expected_signature));
         return false;
     }
@@ -396,7 +433,48 @@ bool auth_read_session(
     memcpy(username, payload, strlen(payload) + 1);
     OPENSSL_cleanse(expected_signature, sizeof(expected_signature));
     OPENSSL_cleanse(provided_signature, sizeof(provided_signature));
+    OPENSSL_cleanse(token_digest, sizeof(token_digest));
     return true;
+}
+
+
+bool auth_revoke_session(struct MHD_Connection *connection)
+{
+    char username[129];
+    char token[320];
+    unsigned char digest[SHA256_DIGEST_LENGTH];
+    time_t now = time(NULL);
+    size_t slot = AUTH_REVOKED_SESSION_CAPACITY;
+
+    if (!auth_read_session(connection, username, sizeof(username))
+        || !read_cookie(connection, AUTH_COOKIE_NAME, token, sizeof(token))
+        || !session_digest(token, digest)) {
+        OPENSSL_cleanse(token, sizeof(token));
+        OPENSSL_cleanse(digest, sizeof(digest));
+        return false;
+    }
+
+    pthread_mutex_lock(&revoked_sessions_lock);
+    for (size_t i = 0; i < AUTH_REVOKED_SESSION_CAPACITY; i++) {
+        RevokedSession *entry = &revoked_sessions[i];
+        if (entry->occupied && entry->expires_at <= now) OPENSSL_cleanse(entry, sizeof(*entry));
+        if (!entry->occupied && slot == AUTH_REVOKED_SESSION_CAPACITY) slot = i;
+        if (entry->occupied && CRYPTO_memcmp(entry->digest, digest, sizeof(digest)) == 0) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < AUTH_REVOKED_SESSION_CAPACITY) {
+        memcpy(revoked_sessions[slot].digest, digest, sizeof(digest));
+        revoked_sessions[slot].expires_at = now + AUTH_SESSION_SECONDS;
+        revoked_sessions[slot].occupied = true;
+    }
+    pthread_mutex_unlock(&revoked_sessions_lock);
+
+    OPENSSL_cleanse(token, sizeof(token));
+    OPENSSL_cleanse(digest, sizeof(digest));
+    OPENSSL_cleanse(username, sizeof(username));
+    return slot < AUTH_REVOKED_SESSION_CAPACITY;
 }
 
 bool auth_verify_credentials(const char *username, const char *password)
@@ -531,6 +609,9 @@ void auth_clear_secrets(void)
     OPENSSL_cleanse(password_digest, sizeof(password_digest));
     OPENSSL_cleanse(session_secret, sizeof(session_secret));
     OPENSSL_cleanse(login_buckets, sizeof(login_buckets));
+    pthread_mutex_lock(&revoked_sessions_lock);
+    OPENSSL_cleanse(revoked_sessions, sizeof(revoked_sessions));
+    pthread_mutex_unlock(&revoked_sessions_lock);
     session_secret_length = 0;
     auth_ready = false;
 }

@@ -13,6 +13,7 @@ void auth_login_failed(struct MHD_Connection *connection);
 void auth_login_succeeded(struct MHD_Connection *connection);
 bool auth_validate_request(struct MHD_Connection *connection);
 bool auth_validate_csrf(struct MHD_Connection *connection);
+bool auth_revoke_session(struct MHD_Connection *connection);
 bool auth_create_session(
     const char *username,
     char *session_cookie,

@@ -267,6 +267,92 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, 403)
 
+    def test_all_authenticated_read_routes_return_valid_json(self):
+        for path in ("/state", "/state-hardware", "/hardware_connection", "/s_o_c", "/s_o_h", "/r_u_l"):
+            with self.subTest(path=path):
+                status, body, _ = self.request("GET", path, headers=self.dashboard_headers())
+                self.assertEqual(status, 200)
+                self.assertIsInstance(body, dict)
+                self.assertGreater(len(body), 0)
+
+    def test_authenticated_state_and_hardware_shapes(self):
+        status, state, _ = self.request("GET", "/state", headers=self.dashboard_headers())
+        self.assertEqual(status, 200)
+        self.assertIn(state.get("state"), ("idle", "charging", "discharging"))
+        self.assertIn("warning_messages", state)
+
+        status, hardware, _ = self.request(
+            "GET", "/hardware_connection", headers=self.dashboard_headers()
+        )
+        self.assertEqual(status, 200)
+        self.assertIsInstance(hardware.get("hardware_connection"), bool)
+
+    def test_telemetry_requires_all_numeric_fields(self):
+        headers = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+        invalid_payloads = (
+            {},
+            {"voltage": 3.7, "current": 0.1},
+            {"voltage": "3.7", "current": 0.1, "temperature": 25},
+            {"voltage": 3.7, "current": None, "temperature": 25},
+            {"voltage": 3.7, "current": 0.1, "temperature": "warm"},
+        )
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                status, body, _ = self.request("POST", "/update", payload, headers)
+                self.assertEqual(status, 400)
+                self.assertEqual(body.get("error"), "invalid_telemetry")
+
+    def test_telemetry_rejects_each_out_of_range_sensor(self):
+        headers = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+        invalid_payloads = (
+            {"voltage": 5.1, "current": 0.0, "temperature": 25.0},
+            {"voltage": 3.7, "current": 2.1, "temperature": 25.0},
+            {"voltage": 3.7, "current": 0.0, "temperature": 85.1},
+        )
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                status, body, _ = self.request("POST", "/update", payload, headers)
+                self.assertEqual(status, 400)
+                self.assertEqual(body.get("error"), "telemetry_out_of_range")
+
+    def test_cycle_count_rejects_missing_malformed_and_overflow_values(self):
+        headers = {
+            **self.dashboard_headers(),
+            "X-CSRF-Token": self.csrf_token,
+        }
+        for path in ("/cycles", "/cycles?count=", "/cycles?count=-1",
+                     "/cycles?count=not-a-number", "/cycles?count=1000000001",
+                     "/cycles?count=999999999999999999999999"):
+            with self.subTest(path=path):
+                status, _, _ = self.request("POST", path, headers=headers)
+                self.assertEqual(status, 400)
+
+    def test_cycle_count_accepts_documented_upper_boundary(self):
+        headers = {
+            **self.dashboard_headers(),
+            "X-CSRF-Token": self.csrf_token,
+        }
+        status, body, _ = self.request("POST", "/cycles?count=1000000000", headers=headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(body.get("message"), "Cycle count updated")
+
+    def test_logout_requires_csrf_and_clears_session(self):
+        status, _, _ = self.request(
+            "POST", "/auth/logout", headers=self.dashboard_headers()
+        )
+        self.assertEqual(status, 403)
+
+        status, _, headers = self.request(
+            "POST",
+            "/auth/logout",
+            headers={**self.dashboard_headers(), "X-CSRF-Token": self.csrf_token},
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(headers.get_all("Set-Cookie") is None)
+
+        status, _, _ = self.request("GET", "/data", headers=self.dashboard_headers())
+        self.assertEqual(status, 401)
+
     def test_request_body_limit_is_enforced(self):
         status, _, _ = self.request(
             "POST",

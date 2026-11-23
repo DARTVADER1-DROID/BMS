@@ -159,13 +159,16 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(body["error"], "unauthenticated")
 
-    def test_bad_credentials_are_rejected(self):
+    def test_bad_and_missing_credentials_are_rejected(self):
         status, _, _ = self.request(
             "POST",
             "/auth/login",
             {"username": USERNAME, "password": "wrong-password"},
         )
         self.assertIn(status, (401, 429))
+
+        status, _, _ = self.request("POST", "/auth/login", {"username": USERNAME})
+        self.assertIn(status, (400, 429))
 
     def test_authenticated_session_reads_dashboard(self):
         status, body, _ = self.request("GET", "/auth/me", headers=self.dashboard_headers())
@@ -174,6 +177,18 @@ class BmsHttpIntegrationTests(unittest.TestCase):
 
         status, _, _ = self.request("GET", "/data", headers=self.dashboard_headers())
         self.assertEqual(status, 200)
+
+    def test_tampered_session_cookie_is_rejected(self):
+        session_name, session_value = self.cookie_header.split(";", 1)[0].split("=", 1)
+        replacement = "A" if session_value[0] != "A" else "B"
+        tampered_cookie = f"{session_name}={replacement}{session_value[1:]}"
+
+        status, _, _ = self.request(
+            "GET",
+            "/data",
+            headers={"Cookie": tampered_cookie},
+        )
+        self.assertEqual(status, 401)
 
     def test_device_endpoint_rejects_missing_and_invalid_tokens(self):
         payload = {"voltage": 3.7, "current": 0.1, "temperature": 25, "time": 1}
@@ -233,13 +248,32 @@ class BmsHttpIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, 503)
 
-    def test_state_changing_request_requires_csrf(self):
+    def test_state_changing_request_requires_valid_csrf(self):
         status, _, _ = self.request(
             "POST",
             "/charge",
             headers=self.dashboard_headers(),
         )
         self.assertEqual(status, 403)
+
+        status, _, _ = self.request(
+            "POST",
+            "/charge",
+            headers={
+                **self.dashboard_headers(),
+                "X-CSRF-Token": "invalid-csrf-token",
+            },
+        )
+        self.assertEqual(status, 403)
+
+    def test_request_body_limit_is_enforced(self):
+        status, _, _ = self.request(
+            "POST",
+            "/update",
+            {"padding": "x" * 9000},
+            {"Authorization": f"Bearer {DEVICE_TOKEN}"},
+        )
+        self.assertEqual(status, 413)
 
     def test_unknown_route_and_wrong_method_are_rejected(self):
         status, _, _ = self.request("GET", "/this-route-does-not-exist", headers=self.dashboard_headers())

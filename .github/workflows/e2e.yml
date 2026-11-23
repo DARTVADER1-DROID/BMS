@@ -1,0 +1,89 @@
+name: BMS browser end-to-end tests
+
+on:
+  push:
+    branches: [rewrite/c-backend]
+    paths:
+      - "backend-c/**"
+      - "frontend-vue/**"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend-c/**"
+      - "frontend-vue/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BMS_AUTH_USERNAME: ci_test
+      BMS_AUTH_PASSWORD: ci_test_password_123
+      BMS_SESSION_SECRET: ci_test_session_secret_12345678901234567890
+      BMS_DEVICE_TOKEN: ci_test_device_token
+      VITE_API_PROXY_TARGET: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libmicrohttpd-dev libcjson-dev libssl-dev curl
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Update npm
+        run: npm install --global npm@11
+
+      - name: Install frontend and browser test dependencies
+        working-directory: frontend-vue
+        run: npm install --no-audit
+
+      - name: Audit frontend dependencies
+        working-directory: frontend-vue
+        run: npm audit --audit-level=moderate
+
+      - name: Install Chromium
+        working-directory: frontend-vue
+        run: npx playwright install --with-deps chromium
+
+      - name: Build real C backend
+        run: |
+          cmake -S backend-c -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Run browser end-to-end suite against real C backend
+        working-directory: frontend-vue
+        run: |
+          set -Eeuo pipefail
+          PORT=18080 ./../build/bms-server > /tmp/bms-e2e.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..30}; do
+            if curl --silent --show-error --fail http://127.0.0.1:18080/health >/tmp/bms-e2e-health.json; then
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat /tmp/bms-e2e.log
+              exit 1
+            fi
+            sleep 1
+          done
+          test -s /tmp/bms-e2e-health.json || {
+            cat /tmp/bms-e2e.log
+            exit 1
+          }
+          npm run test:e2e

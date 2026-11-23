@@ -7,7 +7,7 @@
 #include <math.h>
 #include <stdbool.h>
 
-static enum MHD_Result telemetry_routes_update(
+enum MHD_Result telemetry_routes_update(
     const BmsServerContext *context,
     
     struct MHD_Connection *connection,
@@ -21,7 +21,8 @@ static enum MHD_Result telemetry_routes_update(
     bool valid_telemetry;
 
     if (context->device_token == NULL || context->device_token[0] == '\0' || !http_request_is_authorized(connection, context->device_token)) {
-        return send_response(
+        return http_send_response(
+            context,
             connection,
             401,
             "{\"error\":\"unauthorized_device\"}"
@@ -39,7 +40,8 @@ static enum MHD_Result telemetry_routes_update(
     cJSON_Delete(json);
 
     if (!valid_telemetry) {
-        return send_response(
+        return http_send_response(
+            context,
             connection,
             400,
             "{\"error\":\"invalid_telemetry\"}"
@@ -53,14 +55,16 @@ static enum MHD_Result telemetry_routes_update(
             temperature,
             http_monotonic_time_seconds()
         ) != BMS_OK) {
-        return send_response(
+        return http_send_response(
+            context,
             connection,
             400,
             "{\"error\":\"telemetry_out_of_range\"}"
         );
     }
 
-    return send_response(
+    return http_send_response(
+        context,
         connection,
         200,
         "{\"message\":\"Battery data updated\"}"

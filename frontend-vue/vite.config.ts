@@ -1,9 +1,8 @@
-import { defineConfig } from "vitest/config";
-import { loadEnv } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  const env = loadEnv(mode, ".", "");
   const apiTarget = env.VITE_API_PROXY_TARGET || "https://bms-c-api.onrender.com";
   return {
     plugins: [vue()],
@@ -18,6 +17,5 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: { target: "es2020", sourcemap: true, chunkSizeWarningLimit: 500 },
-    test: { environment: "node", include: ["tests/**/*.test.ts"] },
   };
 });

@@ -27,7 +27,17 @@ target_compile_options(
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow
 )
 
-add_executable(\n    bms-server\n    src/server.c\n    src/auth.c\n    src/api_docs.c\n    src/http_response.c\n    src/auth_routes.c\n    src/telemetry_routes.c\n    src/control_routes.c\n    src/read_routes.c\n)
+add_executable(
+    bms-server
+    src/server.c
+    src/auth.c
+    src/api_docs.c
+    src/http_response.c
+    src/auth_routes.c
+    src/telemetry_routes.c
+    src/control_routes.c
+    src/read_routes.c
+)
 target_link_libraries(
     bms-server PRIVATE
     bms_core

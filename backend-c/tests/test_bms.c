@@ -114,6 +114,62 @@ static void test_invalid_limits_disable_control(void)
     configure_safe_test_limits();
 }
 
+static void test_invalid_timestamps_are_rejected_without_mutation(void)
+{
+    Bms bms;
+
+    bms_init(&bms);
+
+    assert(bms_update_telemetry(&bms, 3.8, 0.1, 25.0, 10.0) == BMS_OK);
+    assert(bms_update_telemetry(&bms, 4.0, 0.2, 26.0, NAN) == BMS_ERR_INVALID);
+    assert(bms_update_telemetry(&bms, 4.0, 0.2, 26.0, INFINITY) == BMS_ERR_INVALID);
+    assert(bms_update_telemetry(&bms, 4.0, 0.2, 26.0, -1.0) == BMS_ERR_INVALID);
+
+    assert(bms.voltage == 3.8);
+    assert(bms.current == 0.1);
+    assert(bms.temperature == 25.0);
+    assert(bms.last_seen == 10.0);
+
+    bms_destroy(&bms);
+}
+
+static void test_telemetry_numeric_limits_and_cycle_upper_bound(void)
+{
+    Bms bms;
+
+    bms_init(&bms);
+
+    assert(bms_update_telemetry(&bms, 1e6, 1e6, 1e4, 0.0) == BMS_OK);
+    assert(bms_update_telemetry(&bms, 1e6 + 1.0, 0.0, 25.0, 1.0) == BMS_ERR_INVALID);
+    assert(bms_set_cycles(&bms, 1000000000LL) == BMS_OK);
+    assert(bms_set_cycles(&bms, 1000000001LL) == BMS_ERR_INVALID);
+
+    bms_destroy(&bms);
+}
+
+static void test_state_name_handles_every_enum_value(void)
+{
+    assert(strcmp(bms_state_name(BMS_IDLE), "idle") == 0);
+    assert(strcmp(bms_state_name(BMS_CHARGING), "charging") == 0);
+    assert(strcmp(bms_state_name(BMS_DISCHARGING), "discharging") == 0);
+    assert(strcmp(bms_state_name((BmsState)99), "idle") == 0);
+}
+
+static void test_soc_clamps_to_valid_percentage(void)
+{
+    Bms bms;
+
+    bms_init(&bms);
+
+    assert(bms_update_telemetry(&bms, -1.0, 0.0, 25.0, 1.0) == BMS_OK);
+    assert(bms_soc(&bms) == 0.0);
+
+    assert(bms_update_telemetry(&bms, 6.0, 0.0, 25.0, 2.0) == BMS_OK);
+    assert(bms_soc(&bms) == 100.0);
+
+    bms_destroy(&bms);
+}
+
 int main(void)
 {
     configure_safe_test_limits();
@@ -124,6 +180,10 @@ int main(void)
     test_non_finite_telemetry_is_rejected();
     test_stale_hardware_heartbeat_stops_bms();
     test_invalid_limits_disable_control();
+    test_invalid_timestamps_are_rejected_without_mutation();
+    test_telemetry_numeric_limits_and_cycle_upper_bound();
+    test_state_name_handles_every_enum_value();
+    test_soc_clamps_to_valid_percentage();
 
     puts("BMS core tests passed");
     return 0;

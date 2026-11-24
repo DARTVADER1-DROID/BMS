@@ -145,7 +145,13 @@ BatteryServiceResult battery_service_get_batteries(
     }
 
     if (repository_result == BATTERY_REPOSITORY_BUFFER_TOO_SMALL) {
+        if (count <= capacity) {
+            free(temporary);
+            return BATTERY_SERVICE_REPOSITORY_ERROR;
+        }
         *count_out = count;
+        free(temporary);
+        return BATTERY_SERVICE_BUFFER_TOO_SMALL;
     }
     free(temporary);
     return map_repository_result(repository_result);
@@ -254,6 +260,9 @@ BatteryServiceResult battery_service_get_battery_count(
         service->repository->context, user_id, NULL, 0U, &count);
 
     if (repository_result == BATTERY_REPOSITORY_BUFFER_TOO_SMALL) {
+        if (count == 0U) {
+            return BATTERY_SERVICE_REPOSITORY_ERROR;
+        }
         *count_out = count;
         return BATTERY_SERVICE_OK;
     }

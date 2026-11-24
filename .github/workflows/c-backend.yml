@@ -1,7 +1,7 @@
 name: C backend CI
 on:
   push:
-    branches: [rewrite/c-backend]
+    branches: [rewrite/c-backend, feature/battery-domain-models]
   pull_request:
     branches: [main]
 jobs:
@@ -42,7 +42,6 @@ jobs:
       - name: HTTP smoke test
         shell: bash
         env:
-          # Disposable credentials used only by this isolated CI process.
           BMS_AUTH_USERNAME: ci_test
           BMS_AUTH_PASSWORD: ci_test_password_123
           BMS_SESSION_SECRET: ci_test_session_secret_12345678901234567890
@@ -82,26 +81,23 @@ jobs:
           grep -q '"implementation":"c"' /tmp/health.json
           echo "PASS: unauthenticated health endpoint"
 
-          # Dashboard endpoints must reject requests without a signed session.
           unauthenticated_status=$(curl --silent --show-error -o /tmp/unauthenticated.json -w '%{http_code}' http://127.0.0.1:18080/data)
           test "$unauthenticated_status" = "401"
           echo "PASS: dashboard data rejects unauthenticated requests"
 
-          # Login and retain the signed session cookie and CSRF token.
           login_status=$(curl --silent --show-error -D /tmp/login.headers -o /tmp/login.json -w '%{http_code}' \
             -H 'Content-Type: application/json' \
             -d "{\"username\":\"$BMS_AUTH_USERNAME\",\"password\":\"$BMS_AUTH_PASSWORD\"}" \
             http://127.0.0.1:18080/auth/login)
           test "$login_status" = "200"
 
-          session_cookie=$(sed -n 's/^Set-Cookie: __Host-bms_session=\([^;]*\).*/\1/ip' /tmp/login.headers | tr -d '\r' | head -n 1)
+          session_cookie=$(sed -n 's/^Set-Cookie: __Host-bms_session=\\([^;]*\\).*/\\1/ip' /tmp/login.headers | tr -d '\\r' | head -n 1)
           csrf_token=$(python3 -c 'import json; print(json.load(open("/tmp/login.json"))["csrf_token"])')
           test -n "$session_cookie"
           test "${#csrf_token}" -eq 64
           cookie_header="__Host-bms_session=$session_cookie; __Host-bms_csrf=$csrf_token"
           echo "PASS: dashboard login issues session and CSRF credentials"
 
-          # Device telemetry must reject missing and invalid bearer tokens.
           invalid_device_status=$(curl --silent --show-error -o /tmp/invalid-device.json -w '%{http_code}' \
             -X POST http://127.0.0.1:18080/update \
             -H 'Content-Type: application/json' \
@@ -122,7 +118,6 @@ jobs:
           grep -q '"voltage":3.7' /tmp/data.json
           echo "PASS: authenticated dashboard reads updated telemetry"
 
-          # Control is intentionally uncommissioned in CI and must stay disabled.
           control_status=$(curl --silent --show-error -o /tmp/charge.json -w '%{http_code}' \
             -X POST http://127.0.0.1:18080/charge \
             -H "Cookie: $cookie_header" \

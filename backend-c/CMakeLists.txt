@@ -82,6 +82,20 @@ if(BUILD_TESTING)
     target_compile_options(test_battery_fleet PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     add_test(NAME battery_fleet_tests COMMAND test_battery_fleet)
 
+    add_executable(
+        test_battery_fleet_integration
+        tests/integration/test_battery_fleet_integration.c
+    )
+    target_link_libraries(test_battery_fleet_integration PRIVATE bms_domain)
+    target_compile_options(
+        test_battery_fleet_integration PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(
+        NAME battery_fleet_domain_integration_tests
+        COMMAND test_battery_fleet_integration
+    )
+
     add_executable(test_auth tests/unit/security/test_auth.c src/security/auth.c)
     target_link_libraries(
         test_auth PRIVATE

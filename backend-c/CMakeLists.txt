@@ -52,7 +52,11 @@ target_compile_options(
 
 include(CTest)
 
-add_library(bms_domain STATIC src/domain/entities/battery.c)
+add_library(
+    bms_domain STATIC
+    src/domain/entities/battery.c
+    src/domain/entities/battery_fleet.c
+)
 target_include_directories(bms_domain PUBLIC include)
 target_link_libraries(bms_domain PUBLIC PkgConfig::CJSON)
 target_compile_options(bms_domain PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
@@ -72,6 +76,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_domain_models PRIVATE bms_domain)
     target_compile_options(test_domain_models PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     add_test(NAME battery_domain_tests COMMAND test_domain_models)
+
+    add_executable(test_battery_fleet tests/unit/domain/test_battery_fleet.c)
+    target_link_libraries(test_battery_fleet PRIVATE bms_domain)
+    target_compile_options(test_battery_fleet PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    add_test(NAME battery_fleet_tests COMMAND test_battery_fleet)
 
     add_executable(test_auth tests/unit/security/test_auth.c src/security/auth.c)
     target_link_libraries(

@@ -15,7 +15,7 @@
  *
  * create() must reject duplicate battery IDs and ensure the battery belongs
  * to the user's fleet. update() must not move a battery to another fleet.
- * find_all() returns FLEET_REPOSITORY_OK with count_out == 0 when the user
+ * find_all() returns BATTERY_REPOSITORY_OK with count_out == 0 when the user
  * has no batteries. Buffer operations must not write beyond capacity; when
  * the buffer is too small they return BUFFER_TOO_SMALL and report the
  * required record count through count_out.

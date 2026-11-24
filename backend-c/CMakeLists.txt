@@ -65,6 +65,8 @@ add_library(
     bms_application STATIC
     src/application/fleet/fleet_repository.c
     src/application/fleet/fleet_service.c
+    src/application/telemetry/telemetry_repository.c
+    src/application/telemetry/telemetry_service.c
 )
 target_include_directories(bms_application PUBLIC include)
 target_link_libraries(bms_application PUBLIC bms_domain)

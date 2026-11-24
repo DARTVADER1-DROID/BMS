@@ -61,6 +61,18 @@ target_include_directories(bms_domain PUBLIC include)
 target_link_libraries(bms_domain PUBLIC PkgConfig::CJSON)
 target_compile_options(bms_domain PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
+add_library(
+    bms_application STATIC
+    src/application/fleet/fleet_repository.c
+    src/application/fleet/fleet_service.c
+)
+target_include_directories(bms_application PUBLIC include)
+target_link_libraries(bms_application PUBLIC bms_domain)
+target_compile_options(
+    bms_application PRIVATE
+    -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+)
+
 if(BUILD_TESTING)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
@@ -95,6 +107,14 @@ if(BUILD_TESTING)
         NAME battery_fleet_domain_integration_tests
         COMMAND test_battery_fleet_integration
     )
+
+    add_executable(test_fleet_service tests/unit/application/test_fleet_service.c)
+    target_link_libraries(test_fleet_service PRIVATE bms_application)
+    target_compile_options(
+        test_fleet_service PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(NAME fleet_service_tests COMMAND test_fleet_service)
 
     add_executable(test_auth tests/unit/security/test_auth.c src/security/auth.c)
     target_link_libraries(

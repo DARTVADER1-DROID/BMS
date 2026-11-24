@@ -1,9 +1,10 @@
 #include "application/fleet/fleet_service.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
-#define CHECK(condition, code) do { if (!(condition)) return (code); } while (0)
+#define CHECK(condition, code) do { if (!(condition)) { fprintf(stderr, "FleetService test failure: %d\\n", (code)); return (code); } } while (0)
 
 typedef struct {
     bool has_fleet;

@@ -412,6 +412,7 @@ static int test_repository_error_mapping_for_each_operation(void)
     store.create_result = FLEET_REPOSITORY_OK;
     CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
           == FLEET_SERVICE_OK, 72);
+    store.find_result = FLEET_REPOSITORY_OK;
 
     store.update_result = FLEET_REPOSITORY_ERROR;
     fleet.name = "Changed";

@@ -14,10 +14,10 @@ pkg_check_modules(CJSON REQUIRED IMPORTED_TARGET libcjson)
 
 add_library(
     bms_core STATIC
-    src/bms.c
-    src/diagnostic.c
-    src/battery_features.c
-    src/battery_health.c
+    src/core/bms.c
+    src/diagnostics/diagnostic.c
+    src/diagnostics/battery_features.c
+    src/diagnostics/battery_health.c
 )
 
 target_include_directories(bms_core PUBLIC include)
@@ -29,14 +29,14 @@ target_compile_options(
 
 add_executable(
     bms-server
-    src/server.c
-    src/auth.c
-    src/api_docs.c
-    src/http_response.c
-    src/auth_routes.c
-    src/telemetry_routes.c
-    src/control_routes.c
-    src/read_routes.c
+    src/http/server.c
+    src/security/auth.c
+    src/http/api_docs.c
+    src/http/http_response.c
+    src/http/auth_routes.c
+    src/http/telemetry_routes.c
+    src/http/control_routes.c
+    src/http/read_routes.c
 )
 target_link_libraries(
     bms-server PRIVATE
@@ -55,11 +55,11 @@ include(CTest)
 if(BUILD_TESTING)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-    add_executable(test_bms tests/test_bms.c)
+    add_executable(test_bms tests/unit/core/test_bms.c)
     target_link_libraries(test_bms PRIVATE bms_core)
     add_test(NAME bms_core_tests COMMAND test_bms)
 
-    add_executable(test_battery_diagnostics tests/test_battery_diagnostics.c)
+    add_executable(test_battery_diagnostics tests/unit/diagnostics/test_battery_diagnostics.c)
     target_link_libraries(test_battery_diagnostics PRIVATE bms_core)
     add_test(NAME battery_diagnostics_tests COMMAND test_battery_diagnostics)
 
@@ -71,7 +71,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME domain_model_scaffold_tests COMMAND test_domain_models)
 
-    add_executable(test_auth tests/test_auth.c src/auth.c)
+    add_executable(test_auth tests/unit/security/test_auth.c src/security/auth.c)
     target_link_libraries(
         test_auth PRIVATE
         PkgConfig::MICROHTTPD
@@ -85,7 +85,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME authentication_tests COMMAND test_auth)
 
-    add_executable(test_edge_cases tests/test_edge_cases.c)
+    add_executable(test_edge_cases tests/unit/diagnostics/test_edge_cases.c)
     target_link_libraries(test_edge_cases PRIVATE bms_core)
     target_compile_options(
         test_edge_cases PRIVATE
@@ -98,6 +98,6 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND} -E env
             BMS_SERVER_BINARY=$<TARGET_FILE:bms-server>
             ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_integration.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_http_integration.py
     )
 endif()

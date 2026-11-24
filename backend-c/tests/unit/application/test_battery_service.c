@@ -261,7 +261,7 @@ static int test_get_all_buffer_semantics_and_output_preservation(void)
     Battery second = make_battery(
         "123e4567-e89b-12d3-a456-426614174102",
         "123e4567-e89b-12d3-a456-426614174010", "Pack B");
-    Battery output[2] = {{0}};
+    Battery output[2] = {0};
     size_t count = 77U;
 
     setup(&store, &repository, &service);

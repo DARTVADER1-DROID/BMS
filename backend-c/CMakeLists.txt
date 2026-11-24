@@ -52,6 +52,11 @@ target_compile_options(
 
 include(CTest)
 
+add_library(bms_domain STATIC src/domain/entities/battery.c)
+target_include_directories(bms_domain PUBLIC include)
+target_link_libraries(bms_domain PUBLIC PkgConfig::CJSON)
+target_compile_options(bms_domain PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
 if(BUILD_TESTING)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
@@ -64,12 +69,9 @@ if(BUILD_TESTING)
     add_test(NAME battery_diagnostics_tests COMMAND test_battery_diagnostics)
 
     add_executable(test_domain_models tests/unit/domain/test_domain_models.c)
-    target_include_directories(test_domain_models PRIVATE include)
-    target_compile_options(
-        test_domain_models PRIVATE
-        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
-    )
-    add_test(NAME domain_model_scaffold_tests COMMAND test_domain_models)
+    target_link_libraries(test_domain_models PRIVATE bms_domain)
+    target_compile_options(test_domain_models PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    add_test(NAME battery_domain_tests COMMAND test_domain_models)
 
     add_executable(test_auth tests/unit/security/test_auth.c src/security/auth.c)
     target_link_libraries(

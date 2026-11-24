@@ -89,7 +89,18 @@ jobs:
             -H 'Content-Type: application/json' \
             -d "{\"username\":\"$BMS_AUTH_USERNAME\",\"password\":\"$BMS_AUTH_PASSWORD\"}" \
             http://127.0.0.1:18080/auth/login)
-          test "$login_status" = "200"
+          if [[ "$login_status" != "200" ]]; then
+            echo "FAIL: dashboard login returned HTTP $login_status"
+            echo "Login response body:"
+            cat /tmp/login.json
+            echo
+            echo "Login response headers:"
+            cat /tmp/login.headers
+            echo
+            echo "Backend log:"
+            cat /tmp/bms.log
+            exit 1
+          fi
 
           session_cookie=$(sed -n 's/^Set-Cookie: __Host-bms_session=\\([^;]*\\).*/\\1/ip' /tmp/login.headers | tr -d '\\r' | head -n 1)
           csrf_token=$(python3 -c 'import json; print(json.load(open("/tmp/login.json"))["csrf_token"])')

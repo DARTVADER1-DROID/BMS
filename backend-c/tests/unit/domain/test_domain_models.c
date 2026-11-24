@@ -1,6 +1,7 @@
 #include "domain/entities/battery.h"
 
 #include <stddef.h>
+#include <string.h>
 
 static BmsUuid make_uuid(const char *value)
 {
@@ -36,24 +37,24 @@ int main(void)
 
     if (battery.battery_id.value[36] != '\0'
         || battery.fleet_id.value[36] != '\0'
-        || battery.name != (const char *)"Pack 01"
-        || battery.status != (const char *)"ACTIVE"
-        || battery.configuration_json != (const char *)"{}") {
+        || strcmp(battery.name, "Pack 01") != 0
+        || strcmp(battery.status, "ACTIVE") != 0
+        || strcmp(battery.configuration_json, "{}") != 0) {
         return 3;
     }
 
     if (!battery_rename(&battery, "Backup Pack")
-        || battery.name != (const char *)"Backup Pack") {
+        || strcmp(battery.name, "Backup Pack") != 0) {
         return 4;
     }
 
     if (!battery_set_status(&battery, "MAINTENANCE")
-        || battery.status != (const char *)"MAINTENANCE") {
+        || strcmp(battery.status, "MAINTENANCE") != 0) {
         return 5;
     }
 
     if (!battery_update_configuration(&battery, "{\"cells\": 4}")
-        || battery.configuration_json != (const char *)"{\"cells\": 4}") {
+        || strcmp(battery.configuration_json, "{\"cells\": 4}") != 0) {
         return 6;
     }
 

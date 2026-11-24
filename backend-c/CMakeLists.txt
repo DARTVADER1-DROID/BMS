@@ -128,6 +128,20 @@ if(BUILD_TESTING)
     )
     add_test(NAME battery_service_tests COMMAND test_battery_service)
 
+    add_executable(
+        test_battery_service_adversarial
+        tests/unit/application/test_battery_service_adversarial.c
+    )
+    target_link_libraries(test_battery_service_adversarial PRIVATE bms_application)
+    target_compile_options(
+        test_battery_service_adversarial PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(
+        NAME battery_service_adversarial_tests
+        COMMAND test_battery_service_adversarial
+    )
+
     add_executable(test_fleet_service tests/unit/application/test_fleet_service.c)
     target_link_libraries(test_fleet_service PRIVATE bms_application)
     target_compile_options(

@@ -28,6 +28,8 @@ enum {
     MODE_WRONG_ID,
     MODE_COUNT_OVERFLOW,
     MODE_COUNT_ONLY_LIES,
+    MODE_BUFFER_TOO_SMALL_LIES,
+    MODE_COUNT_ONLY_EMPTY_TOO_SMALL,
     MODE_UNKNOWN_RESULT
 };
 
@@ -85,6 +87,14 @@ static BatteryRepositoryResult find_all_records(
     }
     if (store->mode == MODE_UNKNOWN_RESULT) return (BatteryRepositoryResult)999;
     count = store->counts[(size_t)owner];
+    if (store->mode == MODE_BUFFER_TOO_SMALL_LIES && out != NULL) {
+        *count_out = capacity;
+        return BATTERY_REPOSITORY_BUFFER_TOO_SMALL;
+    }
+    if (store->mode == MODE_COUNT_ONLY_EMPTY_TOO_SMALL && out == NULL) {
+        *count_out = 0U;
+        return BATTERY_REPOSITORY_BUFFER_TOO_SMALL;
+    }
     if (store->mode == MODE_COUNT_ONLY_LIES && out == NULL) {
         *count_out = 1U;
         return BATTERY_REPOSITORY_OK;
@@ -275,6 +285,18 @@ static int test_repository_faults_and_output_atomicity(void)
     CHECK(battery_service_get_battery_count(&service, &store.user_ids[0], &count)
         == BATTERY_SERVICE_REPOSITORY_ERROR, 20);
     CHECK(count == 888U, 21);
+
+    store.mode = MODE_BUFFER_TOO_SMALL_LIES;
+    count = 889U;
+    CHECK(battery_service_get_batteries(&service, &store.user_ids[0], output, 2U, &count)
+        == BATTERY_SERVICE_REPOSITORY_ERROR, 27);
+    CHECK(count == 889U, 28);
+
+    store.mode = MODE_COUNT_ONLY_EMPTY_TOO_SMALL;
+    count = 890U;
+    CHECK(battery_service_get_battery_count(&service, &store.user_ids[0], &count)
+        == BATTERY_SERVICE_REPOSITORY_ERROR, 29);
+    CHECK(count == 890U, 30);
 
     store.mode = MODE_UNKNOWN_RESULT;
     CHECK(battery_service_get_batteries(&service, &store.user_ids[0], output, 2U, &count)

@@ -63,6 +63,7 @@ target_compile_options(bms_domain PRIVATE -Wall -Wextra -Wpedantic -Wconversion 
 
 add_library(
     bms_application STATIC
+    src/application/battery/battery_repository.c
     src/application/fleet/fleet_repository.c
     src/application/fleet/fleet_service.c
     src/application/telemetry/telemetry_repository.c
@@ -109,6 +110,14 @@ if(BUILD_TESTING)
         NAME battery_fleet_domain_integration_tests
         COMMAND test_battery_fleet_integration
     )
+
+    add_executable(test_battery_repository tests/unit/application/test_battery_repository.c)
+    target_link_libraries(test_battery_repository PRIVATE bms_application)
+    target_compile_options(
+        test_battery_repository PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(NAME battery_repository_tests COMMAND test_battery_repository)
 
     add_executable(test_fleet_service tests/unit/application/test_fleet_service.c)
     target_link_libraries(test_fleet_service PRIVATE bms_application)

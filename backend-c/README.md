@@ -138,7 +138,7 @@ The native backend keeps battery-domain logic independent of HTTP and authentica
 - `src/diagnostics/battery_features.c`: pure feature calculations from completed tests.
 - `src/diagnostics/battery_health.c`: calibrated SOH and history-based RUL calculations.
 - `src/security/auth.c` / `include/security/auth.h`: login throttling, password verification, sessions and CSRF.
-- `src/http/api_docs.c` / `include/api_docs.h`: OpenAPI document and Swagger UI page.
+- `src/http/api_docs.c` / `include/http/api_docs.h`: OpenAPI document and Swagger UI page.
 - `src/http/server.c`: HTTP transport, route dispatch, request lifecycle and process startup.
 
 Keep domain modules free of HTTP types. Keep API documentation out of request-routing code. New battery behavior belongs in the domain modules with unit tests; endpoint behavior belongs in the HTTP integration tests.
@@ -149,40 +149,15 @@ Keep domain modules free of HTTP types. Keep API documentation out of request-ro
 HTTP transport and API behavior are separated into small modules:
 
 - `src/http/server.c`: process startup, request-body lifecycle, HTTP method dispatch, shutdown and safety-monitor thread.
-- `src/http/http_response.c` / `include/http_response.h`: JSON/HTML response creation, common security headers, bearer-token parsing and monotonic timestamps.
-- `src/http/auth_routes.c` / `include/auth_routes.h`: login, session inspection and logout.
-- `src/http/telemetry_routes.c` / `include/telemetry_routes.h`: device-token validation and telemetry ingestion.
-- `src/http/control_routes.c` / `include/control_routes.h`: charging/discharging/stop commands and cycle-count updates.
-- `src/http/read_routes.c` / `include/read_routes.h`: health, telemetry, state, hardware connection and estimate read endpoints.
+- `src/http/http_response.c` / `include/http/http_response.h`: JSON/HTML response creation, common security headers, bearer-token parsing and monotonic timestamps.
+- `src/http/auth_routes.c` / `include/http/auth_routes.h`: login, session inspection and logout.
+- `src/http/telemetry_routes.c` / `include/http/telemetry_routes.h`: device-token validation and telemetry ingestion.
+- `src/http/control_routes.c` / `include/http/control_routes.h`: charging/discharging/stop commands and cycle-count updates.
+- `src/http/read_routes.c` / `include/http/read_routes.h`: health, telemetry, state, hardware connection and estimate read endpoints.
 - `include/http/server_context.h`: explicit dependencies shared with route modules; avoids hidden route-level globals.
 - `src/http/api_docs.c`: OpenAPI and Swagger UI assets.
 
 Route modules receive a read-only server context pointer. They do not own process startup, sockets, request buffers or global server lifecycle. Keep authentication policy in the dispatcher and authentication module, and keep endpoint-specific behavior inside the corresponding route module.
-
-## Backend source layout
-
-The C backend keeps the existing runtime modules stable while grouping the new domain model by responsibility:
-
-```text
-backend-c/
-├── include/
-│   ├── domain/
-│   │   ├── entities/
-│   │   │   ├── battery.h
-│   │   │   └── battery_fleet.h
-│   │   └── value_objects/
-│   │       └── domain_types.h
-│   └── [existing public backend headers]
-├── src/
-│   └── [existing backend implementations]
-└── tests/
-    ├── unit/
-    │   └── domain/
-    │       └── test_domain_models.c
-    └── [existing integration and module tests]
-```
-
-Domain entities are kept separate from shared value types. Domain unit tests live under `tests/unit/domain`; existing backend modules and their paths are unchanged to avoid unrelated churn. As domain behavior is implemented, its source files should be added under `src/domain`, with matching tests under `tests/unit/domain`.
 
 ## Backend directory layout
 

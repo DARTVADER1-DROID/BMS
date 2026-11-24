@@ -129,6 +129,20 @@ The suite contains:
 The HTTP integration tests use only Python's standard library. They run as part of CTest and do not require a separately running backend.
 
 
+## Battery domain entity
+
+The initial `Battery` entity is implemented in:
+
+- `include/domain/entities/battery.h`: the UML-aligned data structure and public operations.
+- `src/domain/entities/battery.c`: initialization, validation and field updates.
+- `tests/unit/domain/test_domain_models.c`: Battery entity unit tests.
+
+The implementation retains the five UML attributes: `battery_id`, `fleet_id`, `name`, `status` and `configuration_json`. UUIDs must use the canonical 36-character hexadecimal-and-hyphen representation. Name and status must be non-empty (whitespace-only values are rejected). Configuration must be a complete valid JSON object; an empty object (`{}`) is accepted.
+
+The current status field intentionally remains a non-empty string because the permitted lifecycle values have not yet been finalized. The entity does not check whether a fleet exists or whether its owner matches the authenticated user; those checks belong to the application/repository boundary. It also does not own the memory referenced by its string fields: callers must keep those strings alive while the entity uses them. Configuration updates replace the complete JSON document rather than merging it.
+
+The domain target links to the existing cJSON dependency for configuration validation. The Battery entity is not yet wired into HTTP routes or persistence.
+
 ## Backend module boundaries
 
 The native backend keeps battery-domain logic independent of HTTP and authentication:

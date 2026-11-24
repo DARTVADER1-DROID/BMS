@@ -38,7 +38,7 @@ jobs:
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: |
           ctest --test-dir build-sanitize --output-on-failure \
-            -R 'bms_core_tests|battery_diagnostics_tests|battery_domain_tests|battery_fleet_tests|battery_fleet_domain_integration_tests|authentication_tests|bms_edge_case_tests'
+            -R 'bms_core_tests|battery_diagnostics_tests|battery_domain_tests|battery_fleet_tests|battery_fleet_domain_integration_tests|battery_repository_tests|authentication_tests|bms_edge_case_tests'
       - name: HTTP smoke test
         shell: bash
         env:

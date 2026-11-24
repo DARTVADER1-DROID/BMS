@@ -143,6 +143,16 @@ The current status field intentionally remains a non-empty string because the pe
 
 The domain target links to the existing cJSON dependency for configuration validation. The Battery entity is not yet wired into HTTP routes or persistence.
 
+## Battery fleet domain entity
+
+The `BatteryFleet` entity is implemented in:
+
+- `include/domain/entities/battery_fleet.h`: the existing five-field domain structure and public operations.
+- `src/domain/entities/battery_fleet.c`: initialization, validation and rename behavior.
+- `tests/unit/domain/test_battery_fleet.c`: focused unit tests.
+
+The entity retains `fleet_id`, `owner_id`, `name`, `created_at` and `updated_at`. Fleet and owner identifiers must use canonical 36-character UUID text. The name must be non-empty and not whitespace-only. The timestamp values are preserved as supplied; ordering and clock-source policy are intentionally not imposed here. The one-fleet-per-user rule is a relationship constraint and must be enforced by the application/repository layer, not by an isolated fleet object.
+
 ## Backend module boundaries
 
 The native backend keeps battery-domain logic independent of HTTP and authentication:

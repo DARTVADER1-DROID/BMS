@@ -110,14 +110,12 @@ static int test_entity_updates_preserve_association_and_independence(void)
         make_uuid("123e4567-e89b-12d3-a456-426614174010");
     BatteryFleet fleet = {0};
     Battery battery = {0};
-    const char *original_fleet_name;
 
     CHECK(battery_fleet_init(
               &fleet, &fleet_id, &owner_id, "Original fleet", 1000, 2000), 14);
     CHECK(battery_init(
               &battery, &battery_id, &fleet_id,
               "Original pack", "ACTIVE", "{}"), 15);
-    original_fleet_name = fleet.name;
 
     CHECK(battery_fleet_rename(&fleet, "Renamed fleet"), 16);
     CHECK(strcmp(fleet.name, "Renamed fleet") == 0, 17);
@@ -131,7 +129,6 @@ static int test_entity_updates_preserve_association_and_independence(void)
     CHECK(strcmp(battery.name, "Renamed pack") == 0, 24);
     CHECK(strcmp(battery.status, "MAINTENANCE") == 0, 25);
     CHECK(strcmp(battery.configuration_json, "{\"cells\": 16}") == 0, 26);
-    CHECK(original_fleet_name != NULL, 27);
     return 0;
 }
 

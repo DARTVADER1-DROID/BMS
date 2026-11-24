@@ -85,7 +85,7 @@ if(BUILD_TESTING)
     )
     add_test(NAME authentication_tests COMMAND test_auth)
 
-    add_executable(test_edge_cases tests/unit/diagnostics/test_edge_cases.c)
+    add_executable(test_edge_cases tests/unit/cross_module/test_edge_cases.c)
     target_link_libraries(test_edge_cases PRIVATE bms_core)
     target_compile_options(
         test_edge_cases PRIVATE

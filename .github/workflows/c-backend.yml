@@ -107,7 +107,7 @@ jobs:
             exit 1
           fi
 
-          session_cookie=$(sed -n 's/^Set-Cookie: __Host-bms_session=\\([^;]*\\).*/\\1/ip' /tmp/login.headers | tr -d '\\r' | head -n 1)
+          session_cookie=$(sed -n 's/^Set-Cookie: __Host-bms_session=\([^;]*\).*/\1/ip' /tmp/login.headers | tr -d '\r' | head -n 1)
           csrf_token=$(python3 -c 'import json; print(json.load(open("/tmp/login.json"))["csrf_token"])')
           test -n "$session_cookie"
           test "${#csrf_token}" -eq 64

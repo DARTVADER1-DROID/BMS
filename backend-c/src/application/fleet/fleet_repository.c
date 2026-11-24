@@ -1,5 +1,7 @@
 #include "application/fleet/fleet_repository.h"
 
+#include <stddef.h>
+
 bool fleet_repository_is_valid(const FleetRepository *repository)
 {
     return repository != NULL

@@ -208,7 +208,7 @@ static int test_user_partition_and_cross_user_access(void)
     Battery b = make_battery("123e4567-e89b-12d3-a456-426614174102",
         "123e4567-e89b-12d3-a456-426614174020", "User B pack");
     Battery output = {0};
-    Battery list[2] = {{0}};
+    Battery list[2] = {0};
     size_t count = 0U;
 
     setup(&store, &repository, &service);

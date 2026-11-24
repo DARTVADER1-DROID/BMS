@@ -78,10 +78,10 @@ The root Dockerfile builds the native service and runs core tests in the build s
 
 The diagnostic code is split by responsibility so each part can be read and tested independently:
 
-- `include/diagnostic.h`, `src/diagnostic.c`: test sequence, sample validation, and abort conditions.
-- `include/battery_types.h`: shared, plain-data structures.
-- `include/battery_features.h`, `src/battery_features.c`: pure calculations from a completed pulse test.
-- `include/battery_health.h`, `src/battery_health.c`: calibrated SOH regression and historical RUL trend.
+- `include/diagnostics/diagnostic.h`, `src/diagnostics/diagnostic.c`: test sequence, sample validation, and abort conditions.
+- `include/diagnostics/battery_types.h`: shared, plain-data structures.
+- `include/diagnostics/battery_features.h`, `src/diagnostics/battery_features.c`: pure calculations from a completed pulse test.
+- `include/diagnostics/battery_health.h`, `src/diagnostics/battery_health.c`: calibrated SOH regression and historical RUL trend.
 
 The flow is: initialize diagnostic -> begin with a stable resting measurement -> feed timestamped samples -> finish after load removal and recovery -> calculate features -> estimate SOH/RUL if calibration/history exists.
 
@@ -133,13 +133,13 @@ The HTTP integration tests use only Python's standard library. They run as part 
 
 The native backend keeps battery-domain logic independent of HTTP and authentication:
 
-- `src/bms.c` / `include/bms.h`: BMS state, telemetry, interlocks and estimates.
-- `src/diagnostic.c`: diagnostic state machine and sample safety checks.
-- `src/battery_features.c`: pure feature calculations from completed tests.
-- `src/battery_health.c`: calibrated SOH and history-based RUL calculations.
-- `src/auth.c` / `include/auth.h`: login throttling, password verification, sessions and CSRF.
-- `src/api_docs.c` / `include/api_docs.h`: OpenAPI document and Swagger UI page.
-- `src/server.c`: HTTP transport, route dispatch, request lifecycle and process startup.
+- `src/core/bms.c` / `include/core/bms.h`: BMS state, telemetry, interlocks and estimates.
+- `src/diagnostics/diagnostic.c`: diagnostic state machine and sample safety checks.
+- `src/diagnostics/battery_features.c`: pure feature calculations from completed tests.
+- `src/diagnostics/battery_health.c`: calibrated SOH and history-based RUL calculations.
+- `src/security/auth.c` / `include/security/auth.h`: login throttling, password verification, sessions and CSRF.
+- `src/http/api_docs.c` / `include/api_docs.h`: OpenAPI document and Swagger UI page.
+- `src/http/server.c`: HTTP transport, route dispatch, request lifecycle and process startup.
 
 Keep domain modules free of HTTP types. Keep API documentation out of request-routing code. New battery behavior belongs in the domain modules with unit tests; endpoint behavior belongs in the HTTP integration tests.
 
@@ -148,14 +148,14 @@ Keep domain modules free of HTTP types. Keep API documentation out of request-ro
 
 HTTP transport and API behavior are separated into small modules:
 
-- `src/server.c`: process startup, request-body lifecycle, HTTP method dispatch, shutdown and safety-monitor thread.
-- `src/http_response.c` / `include/http_response.h`: JSON/HTML response creation, common security headers, bearer-token parsing and monotonic timestamps.
-- `src/auth_routes.c` / `include/auth_routes.h`: login, session inspection and logout.
-- `src/telemetry_routes.c` / `include/telemetry_routes.h`: device-token validation and telemetry ingestion.
-- `src/control_routes.c` / `include/control_routes.h`: charging/discharging/stop commands and cycle-count updates.
-- `src/read_routes.c` / `include/read_routes.h`: health, telemetry, state, hardware connection and estimate read endpoints.
-- `include/server_context.h`: explicit dependencies shared with route modules; avoids hidden route-level globals.
-- `src/api_docs.c`: OpenAPI and Swagger UI assets.
+- `src/http/server.c`: process startup, request-body lifecycle, HTTP method dispatch, shutdown and safety-monitor thread.
+- `src/http/http_response.c` / `include/http_response.h`: JSON/HTML response creation, common security headers, bearer-token parsing and monotonic timestamps.
+- `src/http/auth_routes.c` / `include/auth_routes.h`: login, session inspection and logout.
+- `src/http/telemetry_routes.c` / `include/telemetry_routes.h`: device-token validation and telemetry ingestion.
+- `src/http/control_routes.c` / `include/control_routes.h`: charging/discharging/stop commands and cycle-count updates.
+- `src/http/read_routes.c` / `include/read_routes.h`: health, telemetry, state, hardware connection and estimate read endpoints.
+- `include/http/server_context.h`: explicit dependencies shared with route modules; avoids hidden route-level globals.
+- `src/http/api_docs.c`: OpenAPI and Swagger UI assets.
 
 Route modules receive a read-only server context pointer. They do not own process startup, sockets, request buffers or global server lifecycle. Keep authentication policy in the dispatcher and authentication module, and keep endpoint-specific behavior inside the corresponding route module.
 
@@ -183,3 +183,31 @@ backend-c/
 ```
 
 Domain entities are kept separate from shared value types. Domain unit tests live under `tests/unit/domain`; existing backend modules and their paths are unchanged to avoid unrelated churn. As domain behavior is implemented, its source files should be added under `src/domain`, with matching tests under `tests/unit/domain`.
+
+## Backend directory layout
+
+```text
+backend-c/
+├── include/
+│   ├── core/             # BMS state and public core API
+│   ├── diagnostics/      # Diagnostic data, algorithms and estimators
+│   ├── domain/
+│   │   ├── entities/     # Battery and fleet entities
+│   │   └── value_objects/
+│   ├── http/             # HTTP server, routes, response and API docs
+│   └── security/         # Authentication and session API
+├── src/
+│   ├── core/
+│   ├── diagnostics/
+│   ├── http/
+│   └── security/
+└── tests/
+    ├── unit/
+    │   ├── core/
+    │   ├── diagnostics/
+    │   ├── domain/
+    │   └── security/
+    └── integration/
+```
+
+Keep new files in the folder matching their responsibility. The HTTP layer may depend on core and security interfaces; core and diagnostics must not depend on HTTP transport. Keep unit tests beside their logical test category and end-to-end HTTP tests under `tests/integration`.

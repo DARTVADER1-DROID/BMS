@@ -63,6 +63,14 @@ if(BUILD_TESTING)
     target_link_libraries(test_battery_diagnostics PRIVATE bms_core)
     add_test(NAME battery_diagnostics_tests COMMAND test_battery_diagnostics)
 
+    add_executable(test_domain_models tests/test_domain_models.c)
+    target_include_directories(test_domain_models PRIVATE include)
+    target_compile_options(
+        test_domain_models PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+    )
+    add_test(NAME domain_model_scaffold_tests COMMAND test_domain_models)
+
     add_executable(test_auth tests/test_auth.c src/auth.c)
     target_link_libraries(
         test_auth PRIVATE

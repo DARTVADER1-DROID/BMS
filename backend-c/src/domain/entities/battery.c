@@ -55,14 +55,16 @@ static bool is_valid_uuid(const BmsUuid *uuid)
 static bool is_json_object(const char *json)
 {
     cJSON *document;
+    const char *parse_end = NULL;
     bool valid;
 
     if (!is_non_empty_text(json)) {
         return false;
     }
 
-    document = cJSON_Parse(json);
-    if (document == NULL) {
+    document = cJSON_ParseWithOpts(json, &parse_end, true);
+    if (document == NULL || parse_end == NULL) {
+        cJSON_Delete(document);
         return false;
     }
 

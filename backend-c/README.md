@@ -158,3 +158,28 @@ HTTP transport and API behavior are separated into small modules:
 - `src/api_docs.c`: OpenAPI and Swagger UI assets.
 
 Route modules receive a read-only server context pointer. They do not own process startup, sockets, request buffers or global server lifecycle. Keep authentication policy in the dispatcher and authentication module, and keep endpoint-specific behavior inside the corresponding route module.
+
+## Backend source layout
+
+The C backend keeps the existing runtime modules stable while grouping the new domain model by responsibility:
+
+```text
+backend-c/
+├── include/
+│   ├── domain/
+│   │   ├── entities/
+│   │   │   ├── battery.h
+│   │   │   └── battery_fleet.h
+│   │   └── value_objects/
+│   │       └── domain_types.h
+│   └── [existing public backend headers]
+├── src/
+│   └── [existing backend implementations]
+└── tests/
+    ├── unit/
+    │   └── domain/
+    │       └── test_domain_models.c
+    └── [existing integration and module tests]
+```
+
+Domain entities are kept separate from shared value types. Domain unit tests live under `tests/unit/domain`; existing backend modules and their paths are unchanged to avoid unrelated churn. As domain behavior is implemented, its source files should be added under `src/domain`, with matching tests under `tests/unit/domain`.

@@ -46,8 +46,9 @@ static int test_valid_initialization(void)
         make_uuid("123E4567-E89B-12D3-A456-4266141740AB");
     Battery battery = {0};
 
-    CHECK(battery_init(&battery, &battery_id, &fleet_id,
-                      "Pack 01", "ACTIVE", "{}"), 1);
+    CHECK(battery_init(
+              &battery, &battery_id, &fleet_id, "Pack 01", "ACTIVE", "{}"),
+          1);
     CHECK(battery_validate(&battery), 2);
     CHECK(same_uuid(&battery.battery_id, &battery_id), 3);
     CHECK(same_uuid(&battery.fleet_id, &fleet_id), 4);
@@ -55,8 +56,9 @@ static int test_valid_initialization(void)
     CHECK(strcmp(battery.status, "ACTIVE") == 0, 6);
     CHECK(strcmp(battery.configuration_json, "{}") == 0, 7);
 
-    CHECK(battery_init(&battery, &uppercase_id, &fleet_id,
-                       "Unicode name - 电池", "custom-status", " { \"x\" : [1, true, null] } "),
+    CHECK(battery_init(
+              &battery, &uppercase_id, &fleet_id, "Unicode name - 电池",
+              "custom-status", " { \"x\" : [1, true, null] } "),
           8);
     CHECK(battery_validate(&battery), 9);
     return 0;
@@ -85,8 +87,11 @@ static int test_initialization_rejects_invalid_arguments(void)
     CHECK(!battery_init(&battery, &valid_id, NULL, "x", "y", "{}"), 13);
     CHECK(!battery_init(&battery, &invalid_id, &valid_id, "x", "y", "{}"), 14);
     CHECK(!battery_init(&battery, &valid_id, &invalid_id, "x", "y", "{}"), 15);
-    CHECK(!battery_init(&battery, &malformed_separator, &valid_id, "x", "y", "{}"), 16);
-    CHECK(!battery_init(&battery, &invalid_hex, &valid_id, "x", "y", "{}"), 17);
+    CHECK(!battery_init(
+              &battery, &malformed_separator, &valid_id, "x", "y", "{}"),
+          16);
+    CHECK(!battery_init(&battery, &invalid_hex, &valid_id, "x", "y", "{}"),
+          17);
     CHECK(!battery_init(&battery, &short_id, &valid_id, "x", "y", "{}"), 18);
     CHECK(!battery_init(&battery, &valid_id, &valid_id, NULL, "y", "{}"), 19);
     CHECK(!battery_init(&battery, &valid_id, &valid_id, " \t\r\n ", "y", "{}"), 20);
@@ -103,7 +108,9 @@ static int test_uuid_validation(void)
     const BmsUuid valid_id =
         make_uuid("00000000-0000-0000-0000-000000000000");
 
-    CHECK(battery_init(&battery, &valid_id, &valid_id, "Pack", "ACTIVE", "{}"), 25);
+    CHECK(battery_init(
+              &battery, &valid_id, &valid_id, "Pack", "ACTIVE", "{}"),
+          25);
     CHECK(battery_validate(&battery), 26);
 
     battery.battery_id.value[8] = 'x';
@@ -258,7 +265,9 @@ int main(void)
     int result;
 
     result = test_valid_initialization();
-    if (result != 0) return result;
+    if (result != 0) {
+        return result;
+    }
     result = test_initialization_rejects_invalid_arguments();
     if (result != 0) return result;
     result = test_uuid_validation();

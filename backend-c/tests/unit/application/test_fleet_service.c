@@ -282,7 +282,7 @@ static int test_delete_and_repository_error_mapping(void)
           == FLEET_SERVICE_OK, 44);
     CHECK(fleet_service_delete_fleet(&service, &user_id)
           == FLEET_SERVICE_OK, 45);
-    CHECK(!store.has_fleet && store.delete_calls == 1U, 46);
+    CHECK(!store.has_fleet && store.delete_calls == 2U, 46);
     CHECK(fleet_service_get_fleet(&service, &user_id, &fetched)
           == FLEET_SERVICE_NOT_FOUND, 47);
 

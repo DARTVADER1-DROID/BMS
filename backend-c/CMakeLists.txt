@@ -63,7 +63,7 @@ if(BUILD_TESTING)
     target_link_libraries(test_battery_diagnostics PRIVATE bms_core)
     add_test(NAME battery_diagnostics_tests COMMAND test_battery_diagnostics)
 
-    add_executable(test_domain_models tests/test_domain_models.c)
+    add_executable(test_domain_models tests/unit/domain/test_domain_models.c)
     target_include_directories(test_domain_models PRIVATE include)
     target_compile_options(
         test_domain_models PRIVATE

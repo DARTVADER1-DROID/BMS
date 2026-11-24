@@ -9,7 +9,11 @@
 typedef struct {
     bool has_fleet;
     BatteryFleet fleet;
-    FleetRepositoryResult next_result;
+    FleetRepositoryResult find_result;
+    FleetRepositoryResult create_result;
+    FleetRepositoryResult update_result;
+    FleetRepositoryResult delete_result;
+    unsigned int find_calls;
     unsigned int create_calls;
     unsigned int update_calls;
     unsigned int delete_calls;
@@ -42,8 +46,8 @@ static FleetRepositoryResult fake_create(
     FakeFleetStore *store = context;
     ++store->create_calls;
 
-    if (store->next_result != FLEET_REPOSITORY_OK) {
-        return store->next_result;
+    if (store->create_result != FLEET_REPOSITORY_OK) {
+        return store->create_result;
     }
     if (store->has_fleet) {
         return FLEET_REPOSITORY_ALREADY_EXISTS;
@@ -61,9 +65,10 @@ static FleetRepositoryResult fake_find_by_user(
     void *context, const BmsUuid *user_id, BatteryFleet *fleet_out)
 {
     FakeFleetStore *store = context;
+    ++store->find_calls;
 
-    if (store->next_result != FLEET_REPOSITORY_OK) {
-        return store->next_result;
+    if (store->find_result != FLEET_REPOSITORY_OK) {
+        return store->find_result;
     }
     if (!store->has_fleet || !same_uuid(user_id, &store->fleet.owner_id)) {
         return FLEET_REPOSITORY_NOT_FOUND;
@@ -79,8 +84,8 @@ static FleetRepositoryResult fake_update(
     FakeFleetStore *store = context;
     ++store->update_calls;
 
-    if (store->next_result != FLEET_REPOSITORY_OK) {
-        return store->next_result;
+    if (store->update_result != FLEET_REPOSITORY_OK) {
+        return store->update_result;
     }
     if (!store->has_fleet || !same_uuid(user_id, &store->fleet.owner_id)) {
         return FLEET_REPOSITORY_NOT_FOUND;
@@ -99,8 +104,8 @@ static FleetRepositoryResult fake_delete(void *context, const BmsUuid *user_id)
     FakeFleetStore *store = context;
     ++store->delete_calls;
 
-    if (store->next_result != FLEET_REPOSITORY_OK) {
-        return store->next_result;
+    if (store->delete_result != FLEET_REPOSITORY_OK) {
+        return store->delete_result;
     }
     if (!store->has_fleet || !same_uuid(user_id, &store->fleet.owner_id)) {
         return FLEET_REPOSITORY_NOT_FOUND;
@@ -117,7 +122,11 @@ static void setup(
 {
     store->has_fleet = false;
     store->fleet = (BatteryFleet){0};
-    store->next_result = FLEET_REPOSITORY_OK;
+    store->find_result = FLEET_REPOSITORY_OK;
+    store->create_result = FLEET_REPOSITORY_OK;
+    store->update_result = FLEET_REPOSITORY_OK;
+    store->delete_result = FLEET_REPOSITORY_OK;
+    store->find_calls = 0U;
     store->create_calls = 0U;
     store->update_calls = 0U;
     store->delete_calls = 0U;
@@ -286,12 +295,14 @@ static int test_delete_and_repository_error_mapping(void)
     CHECK(fleet_service_get_fleet(&service, &user_id, &fetched)
           == FLEET_SERVICE_NOT_FOUND, 47);
 
-    store.next_result = FLEET_REPOSITORY_ERROR;
+    store.find_result = FLEET_REPOSITORY_ERROR;
     CHECK(fleet_service_get_fleet(&service, &user_id, &fetched)
           == FLEET_SERVICE_REPOSITORY_ERROR, 48);
+    store.delete_result = FLEET_REPOSITORY_ERROR;
     CHECK(fleet_service_delete_fleet(&service, &user_id)
           == FLEET_SERVICE_REPOSITORY_ERROR, 49);
-    store.next_result = FLEET_REPOSITORY_ALREADY_EXISTS;
+    store.find_result = FLEET_REPOSITORY_OK;
+    store.create_result = FLEET_REPOSITORY_ALREADY_EXISTS;
     CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
           == FLEET_SERVICE_ALREADY_EXISTS, 50);
     return 0;
@@ -323,6 +334,174 @@ static int test_repository_cannot_return_another_users_fleet(void)
     return 0;
 }
 
+
+static int test_all_uuid_validation_and_null_outputs(void)
+{
+    FakeFleetStore store;
+    FleetRepository repository;
+    FleetService service = {0};
+    BmsUuid invalid_id = make_uuid("not-a-valid-uuid");
+    BmsUuid user_id = make_uuid("123e4567-e89b-12d3-a456-426614174001");
+    BatteryFleet fleet = {0};
+    FleetSummary summary = {0};
+    bool exists = true;
+
+    setup(&store, &repository, &service);
+    CHECK(fleet_service_create_fleet(&service, &invalid_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 54);
+    CHECK(fleet_service_get_fleet(&service, &invalid_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 55);
+    CHECK(fleet_service_update_fleet(&service, &invalid_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 56);
+    CHECK(fleet_service_delete_fleet(&service, &invalid_id)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 57);
+    CHECK(fleet_service_fleet_exists(&service, &invalid_id, &exists)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 58);
+    CHECK(fleet_service_fleet_exists(&service, &user_id, NULL)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 59);
+    CHECK(fleet_service_get_fleet_summary(&service, &invalid_id, &summary)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 60);
+    CHECK(fleet_service_get_fleet_summary(&service, &user_id, NULL)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 61);
+    CHECK(store.find_calls == 0U && store.create_calls == 0U
+          && store.update_calls == 0U && store.delete_calls == 0U, 62);
+    return 0;
+}
+
+static int test_repository_error_mapping_for_each_operation(void)
+{
+    FakeFleetStore store;
+    FleetRepository repository;
+    FleetService service = {0};
+    const BmsUuid user_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174001");
+    const BmsUuid fleet_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174010");
+    BatteryFleet fleet = {0};
+    BatteryFleet output = {0};
+    bool exists = true;
+    FleetSummary summary = {0};
+
+    setup(&store, &repository, &service);
+    CHECK(battery_fleet_init(&fleet, &fleet_id, &user_id, "Primary", 10, 20), 63);
+
+    store.find_result = FLEET_REPOSITORY_INVALID_ARGUMENT;
+    CHECK(fleet_service_get_fleet(&service, &user_id, &output)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 64);
+    CHECK(fleet_service_fleet_exists(&service, &user_id, &exists)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 65);
+    CHECK(exists, 66);
+    CHECK(fleet_service_get_fleet_summary(&service, &user_id, &summary)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 67);
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 68);
+
+    store.find_result = FLEET_REPOSITORY_NOT_FOUND;
+    store.create_result = FLEET_REPOSITORY_ERROR;
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_REPOSITORY_ERROR, 69);
+
+    store.create_result = FLEET_REPOSITORY_INVALID_ARGUMENT;
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 70);
+
+    store.create_result = FLEET_REPOSITORY_ALREADY_EXISTS;
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_ALREADY_EXISTS, 71);
+
+    store.create_result = FLEET_REPOSITORY_OK;
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_OK, 72);
+
+    store.update_result = FLEET_REPOSITORY_ERROR;
+    fleet.name = "Changed";
+    fleet.updated_at = 30;
+    CHECK(fleet_service_update_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_REPOSITORY_ERROR, 73);
+    store.update_result = FLEET_REPOSITORY_INVALID_ARGUMENT;
+    CHECK(fleet_service_update_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 74);
+    store.update_result = FLEET_REPOSITORY_OK;
+    CHECK(fleet_service_update_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_OK, 75);
+
+    store.delete_result = FLEET_REPOSITORY_INVALID_ARGUMENT;
+    CHECK(fleet_service_delete_fleet(&service, &user_id)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 76);
+    store.delete_result = FLEET_REPOSITORY_OK;
+    CHECK(fleet_service_delete_fleet(&service, &user_id)
+          == FLEET_SERVICE_OK, 77);
+    return 0;
+}
+
+static int test_repository_corruption_is_rejected_without_output_changes(void)
+{
+    FakeFleetStore store;
+    FleetRepository repository;
+    FleetService service = {0};
+    const BmsUuid user_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174001");
+    const BmsUuid other_user =
+        make_uuid("123e4567-e89b-12d3-a456-426614174002");
+    const BmsUuid fleet_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174010");
+    BatteryFleet corrupt = {0};
+    BatteryFleet output = {0};
+    FleetSummary summary = {0};
+    bool exists = true;
+
+    setup(&store, &repository, &service);
+    CHECK(battery_fleet_init(&corrupt, &fleet_id, &user_id, "Valid", 10, 20), 78);
+    corrupt.name = "   ";
+    store.fleet = corrupt;
+    store.has_fleet = true;
+
+    CHECK(fleet_service_get_fleet(&service, &user_id, &output)
+          == FLEET_SERVICE_REPOSITORY_ERROR, 79);
+    CHECK(fleet_service_fleet_exists(&service, &user_id, &exists)
+          == FLEET_SERVICE_REPOSITORY_ERROR, 80);
+    CHECK(exists, 81);
+    summary.created_at = 999;
+    CHECK(fleet_service_get_fleet_summary(&service, &user_id, &summary)
+          == FLEET_SERVICE_REPOSITORY_ERROR, 82);
+    CHECK(summary.created_at == 999, 83);
+
+    CHECK(battery_fleet_init(&corrupt, &fleet_id, &other_user, "Wrong owner", 10, 20), 84);
+    store.fleet = corrupt;
+    CHECK(fleet_service_get_fleet(&service, &user_id, &output)
+          == FLEET_SERVICE_NOT_FOUND, 85);
+    return 0;
+}
+
+static int test_update_requires_existing_fleet_and_immutable_creation_time(void)
+{
+    FakeFleetStore store;
+    FleetRepository repository;
+    FleetService service = {0};
+    const BmsUuid user_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174001");
+    const BmsUuid fleet_id =
+        make_uuid("123e4567-e89b-12d3-a456-426614174010");
+    BatteryFleet fleet = {0};
+
+    setup(&store, &repository, &service);
+    CHECK(battery_fleet_init(&fleet, &fleet_id, &user_id, "Primary", 10, 20), 86);
+    CHECK(fleet_service_update_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_NOT_FOUND, 87);
+    CHECK(store.update_calls == 0U, 88);
+
+    CHECK(fleet_service_create_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_OK, 89);
+    fleet.name = "Changed";
+    fleet.created_at = 11;
+    fleet.updated_at = 30;
+    CHECK(fleet_service_update_fleet(&service, &user_id, &fleet)
+          == FLEET_SERVICE_INVALID_ARGUMENT, 90);
+    CHECK(store.update_calls == 0U, 91);
+    CHECK(strcmp(store.fleet.name, "Primary") == 0, 92);
+    return 0;
+}
+
 int main(void)
 {
     int result;
@@ -338,6 +517,14 @@ int main(void)
     result = test_delete_and_repository_error_mapping();
     if (result != 0) return result;
     result = test_repository_cannot_return_another_users_fleet();
+    if (result != 0) return result;
+    result = test_all_uuid_validation_and_null_outputs();
+    if (result != 0) return result;
+    result = test_repository_error_mapping_for_each_operation();
+    if (result != 0) return result;
+    result = test_repository_corruption_is_rejected_without_output_changes();
+    if (result != 0) return result;
+    result = test_update_requires_existing_fleet_and_immutable_creation_time();
     if (result != 0) return result;
 
     return 0;
